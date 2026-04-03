@@ -90,27 +90,20 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Combined fetch for efficiency
     const fetchData = async () => {
       try {
-        const [cmsRes, catRes] = await Promise.all([
-          fetch('/api/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: '{ homeContent { key value type } }' })
-          }),
-          fetch('/api/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: '{ categories { id name } }' })
+        const res = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            query: '{ homeContent { key value type } categories { id name } }' 
           })
-        ]);
+        });
 
-        const cmsData = await cmsRes.json();
-        const catData = await catRes.json();
+        const data = await res.json();
 
-        if (cmsData.data?.homeContent) {
-          const contentMap = cmsData.data.homeContent.reduce((acc: any, item: any) => {
+        if (data.data?.homeContent) {
+          const contentMap = data.data.homeContent.reduce((acc: any, item: any) => {
             acc[item.key] = item.value;
             return acc;
           }, {});
@@ -121,8 +114,8 @@ export default function Home() {
           if (cmsImages.length > 0) setHeroImages(cmsImages);
         }
 
-        if (catData.data?.categories) {
-          setCategories(catData.data.categories);
+        if (data.data?.categories) {
+          setCategories(data.data.categories);
         }
       } catch (e) {
         console.error("Home data fetch error:", e);
@@ -137,7 +130,7 @@ export default function Home() {
           } else {
             setIsEmailModalOpen(true);
           }
-        }, 1200); // Slightly longer for smooth transition
+        }, 500); // Faster reveal once data is ready
       }
     };
 
