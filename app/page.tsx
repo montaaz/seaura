@@ -128,18 +128,20 @@ export default function Home() {
         console.error("Home data fetch error:", e);
       } finally {
         // Minimum delay for branding visibility
-        setTimeout(() => setInitialLoading(false), 800);
+        setTimeout(() => {
+          setInitialLoading(false);
+          // Only show modal after loading is done and if user is not subscribed
+          const storedEmail = localStorage.getItem('seaura_user_email');
+          if (storedEmail) {
+            setUserEmail(storedEmail);
+          } else {
+            setIsEmailModalOpen(true);
+          }
+        }, 1200); // Slightly longer for smooth transition
       }
     };
 
     fetchData();
-
-    const storedEmail = localStorage.getItem('seaura_user_email');
-    if (storedEmail) {
-      setUserEmail(storedEmail);
-    } else {
-      setIsEmailModalOpen(true);
-    }
 
     const handleScroll = () => {
       const scrolled = window.scrollY > 50;
