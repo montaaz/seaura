@@ -12,7 +12,11 @@ import { useUser } from "@/components/Providers";
 import LoadingScreen from "@/components/LoadingScreen";
 
 export default function ShopPage() {
-    return <Shop />;
+    return (
+        <Suspense fallback={<LoadingScreen />}>
+            <Shop />
+        </Suspense>
+    );
 }
 
 function Shop() {
