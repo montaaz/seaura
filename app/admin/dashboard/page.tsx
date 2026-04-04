@@ -166,6 +166,32 @@ function SettingsManager() {
     );
 }
 
+// --- Shared Image Compression Utility ---
+const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = (maxWidth / width) * height;
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+        };
+    });
+};
+
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
     const [activeTab, setActiveTab] = useState("products");
@@ -378,20 +404,16 @@ function ProductManager() {
         fetchData();
     };
 
-    const handleProductImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setNewProduct(prev => {
-                const newImages = [...prev.images, base64String];
-                return {
-                    ...prev,
-                    images: newImages,
-                    image_url: prev.image_url || base64String
-                };
-            });
-        };
-        reader.readAsDataURL(file);
+    const handleProductImageUpload = async (file: File) => {
+        const compressed = await compressImage(file);
+        setNewProduct(prev => {
+            const newImages = [...prev.images, compressed];
+            return {
+                ...prev,
+                images: newImages,
+                image_url: prev.image_url || compressed
+            };
+        });
     };
 
     const [isSavingProduct, setIsSavingProduct] = useState(false);
@@ -890,16 +912,12 @@ function CMSManager() {
         }));
     };
 
-    const handleImageUpload = (key: string, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setStagedChanges(prev => ({
-                ...prev,
-                [key]: { ...prev[key], value: base64String }
-            }));
-        };
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (key: string, file: File) => {
+        const compressed = await compressImage(file);
+        setStagedChanges(prev => ({
+            ...prev,
+            [key]: { ...prev[key], value: compressed }
+        }));
     };
 
     const handlePublish = async () => {
@@ -1244,16 +1262,13 @@ function NewsletterManager() {
         );
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setUploadedImages(prev => [...prev, reader.result as string]);
-                };
-                reader.readAsDataURL(file);
-            });
+            for (const file of files) {
+                const compressed = await compressImage(file);
+                setUploadedImages(prev => [...prev, compressed]);
+            }
         }
     };
 
