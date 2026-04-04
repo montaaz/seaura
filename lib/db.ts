@@ -6,35 +6,13 @@ const pool = new Pool({
 
 export const query = (text: string, params?: any[]) => pool.query(text, params);
 
-// Minimal Cache for CMS Content (HomeContent) to speed up everything
-let cmsCache: any[] | null = null;
-let lastCacheUpdate: number = 0;
-const CACHE_TTL = 60 * 1000; // 60 seconds
-
-export const getCachedHomeContent = async () => {
-  const now = Date.now();
-  if (cmsCache && (now - lastCacheUpdate < CACHE_TTL)) {
-    return cmsCache;
-  }
-  
-  const res = await pool.query("SELECT * FROM home_content");
-  cmsCache = res.rows;
-  lastCacheUpdate = now;
-  return cmsCache;
-};
-
-export const clearCmsCache = () => { cmsCache = null; };
-
-// Use global to resist HMR reloads in Next.js development
-const globalAny: any = global;
-if (typeof globalAny.dbInitialized === 'undefined') {
-  globalAny.dbInitialized = false;
-}
+let isInitialized = false;
 
 export const initDb = async () => {
-  if (globalAny.dbInitialized) return;
+  if (isInitialized) return;
   try {
     const client = await pool.connect();
+    isInitialized = true;
 
     // Create User Table
     await client.query(`
@@ -235,7 +213,6 @@ export const initDb = async () => {
     `);
 
     client.release();
-    globalAny.dbInitialized = true;
     console.log('Database initialized successfully');
   } catch (err) {
     console.error('Error initializing database:', err);

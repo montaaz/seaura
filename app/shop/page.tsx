@@ -12,11 +12,7 @@ import { useUser } from "@/components/Providers";
 import LoadingScreen from "@/components/LoadingScreen";
 
 export default function ShopPage() {
-    return (
-        <Suspense fallback={<LoadingScreen />}>
-            <Shop />
-        </Suspense>
-    );
+    return <Shop />;
 }
 
 function Shop() {
@@ -39,7 +35,7 @@ function Shop() {
 
     const filteredProducts = products.filter(p => {
         // If searching, ignore category filter to show all matches across shop
-        const matchesCategory = searchQuery ? true : (activeFilter === "ALL" || p.category_id === activeFilter);
+        const matchesCategory = searchQuery ? true : (activeFilter === "ALL" || String(p.category_id) === String(activeFilter));
         const matchesSearch = !searchQuery || 
                              p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                              p.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -317,7 +313,9 @@ function Shop() {
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    if (loading) return <LoadingScreen />;
+    if (loading) {
+        return <LoadingScreen />;
+    }
 
     return (
         <div className={`${styles.shopContainer} ${isSearchOpen ? styles.noScroll : ""}`}>
@@ -605,7 +603,7 @@ function Shop() {
                     <h2 className={styles.sectionTitle}>Curated Selection</h2>
                 </div>
                 <div className={styles.productGrid}>
-                    {filteredProducts.slice(0, 4).map((p: any) => (
+                    {filteredProducts.slice(0).map((p: any) => (
                         <div key={p.id} className={styles.productCard}>
                             <div className={styles.gridImageWrapper}>
                                 <div className={styles.onSale}>NEW</div>

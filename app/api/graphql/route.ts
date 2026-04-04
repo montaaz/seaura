@@ -1,7 +1,7 @@
 import { ApolloServer } from '@apollo/server';
 import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import { gql } from 'graphql-tag';
-import { query, initDb, getCachedHomeContent, clearCmsCache } from '@/lib/db';
+import { query, initDb } from '@/lib/db';
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth';
 import { getServerSession } from "next-auth/next";
 import { sendEmail } from '@/lib/mail';
@@ -168,7 +168,8 @@ const resolvers = {
       return res.rows;
     },
     homeContent: async () => {
-      return await getCachedHomeContent();
+      const res = await query("SELECT * FROM home_content");
+      return res.rows;
     },
     newsletter: async (_: any, __: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
@@ -273,7 +274,6 @@ const resolvers = {
          RETURNING *`,
         [key, value, type, section]
       );
-      clearCmsCache();
       return res.rows[0];
     },
     subscribeNewsletter: async (_: any, { email }: any) => {
@@ -410,12 +410,12 @@ const handler = startServerAndCreateNextHandler(server, {
   }
 });
 
+initDb();
+
 export async function GET(request: Request) {
-  await initDb();
   return handler(request);
 }
 
 export async function POST(request: Request) {
-  await initDb();
   return handler(request);
 }

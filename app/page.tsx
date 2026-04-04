@@ -20,7 +20,7 @@ export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [cmsContent, setCmsContent] = useState<any>({});
   const [categories, setCategories] = useState<any[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [modalEmail, setModalEmail] = useState("");
   const [inlineEmail, setInlineEmail] = useState("");
@@ -90,18 +90,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            query: '{ homeContent { key value type } categories { id name } }' 
-          })
-        });
-
-        const data = await res.json();
-
+    // Fetch Content and Categories in parallel
+    fetch('/api/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: '{ homeContent { key value type } categories { id name } }' })
+    })
+      .then(res => res.json())
+      .then(data => {
         if (data.data?.homeContent) {
           const contentMap = data.data.homeContent.reduce((acc: any, item: any) => {
             acc[item.key] = item.value;
@@ -113,28 +109,19 @@ export default function Home() {
           if (contentMap.hero_image_2) cmsImages.push(contentMap.hero_image_2);
           if (cmsImages.length > 0) setHeroImages(cmsImages);
         }
-
         if (data.data?.categories) {
           setCategories(data.data.categories);
         }
-      } catch (e) {
-        console.error("Home data fetch error:", e);
-      } finally {
-        // Minimum delay for branding visibility
-        setTimeout(() => {
-          setInitialLoading(false);
-          // Only show modal after loading is done and if user is not subscribed
-          const storedEmail = localStorage.getItem('seaura_user_email');
-          if (storedEmail) {
-            setUserEmail(storedEmail);
-          } else {
-            setIsEmailModalOpen(true);
-          }
-        }, 500); // Faster reveal once data is ready
-      }
-    };
+        setIsLoading(false);
+      });
 
-    fetchData();
+    const storedEmail = localStorage.getItem('seaura_user_email');
+    if (storedEmail) {
+      setUserEmail(storedEmail);
+    } else {
+      // Auto-open modal for new visitors on home page
+      setIsEmailModalOpen(true);
+    }
 
     const handleScroll = () => {
       const scrolled = window.scrollY > 50;
@@ -160,7 +147,7 @@ export default function Home() {
       window.removeEventListener("keydown", handleKeydown);
       clearInterval(timer);
     };
-  }, [heroImages.length, setUserEmail, setIsEmailModalOpen]);
+  }, [heroImages.length]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -217,7 +204,9 @@ export default function Home() {
     finally { setIsSubmittingChat(false); }
   };
 
-  if (initialLoading) return <LoadingScreen />;
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <main className={`${styles.main} ${isSearchOpen ? styles.noScroll : ""}`}>
