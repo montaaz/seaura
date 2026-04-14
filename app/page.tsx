@@ -1,14 +1,204 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Fragment } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styles from "./page.module.css";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { ArrowUp, Instagram, MessageCircle, Send, X as CloseIcon, User as UserIcon } from "lucide-react";
 import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
-import LoadingScreen from "@/components/LoadingScreen";
+
+const LoadingScreen = dynamic(() => import('@/components/LoadingScreen'), { ssr: false });
+const Search = dynamic(() => import('@/components/Search'), { ssr: false });
+
+const Star = () => (
+  <svg className={styles.starIcon} viewBox="0 0 24 24">
+    <path d="M12 1.75l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.26L12 1.75z" />
+  </svg>
+);
+
+const HeroSection = React.memo(({ cmsContent, heroImages, currentHeroIndex }: any) => (
+  <section className={styles.hero}>
+    <div className={styles.heroImageWrapper}>
+      {heroImages.map((src: string, idx: number) => {
+        const isVisible = idx === currentHeroIndex || idx === (currentHeroIndex + 1) % heroImages.length;
+        if (!isVisible && idx !== 0) return null;
+        return (
+          <Image
+            key={`${src}-${idx}`}
+            src={src}
+            alt={`Collection ${idx + 1}`}
+            fill
+            priority={idx === 0}
+            quality={85}
+            sizes="100vw"
+            className={`${styles.heroImage} ${idx === currentHeroIndex ? styles.active : ""}`}
+          />
+        );
+      })}
+      <div className={styles.heroOverlay}>
+        <h1 className={styles.heroTitle}>{cmsContent.hero_title || "NEW IN"}</h1>
+        <a href="#" className={styles.heroLink}>{cmsContent.hero_link_text || "Plus d'informations"}</a>
+      </div>
+    </div>
+  </section>
+));
+
+const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) => {
+  const reviews = [3, 5, 1, 4];
+  return (
+    <section className={styles.featuredProducts}>
+      <h4 className={styles.featuredSubtitle}>FOR THE INDECISIVE SOUL</h4>
+      <h2 className={styles.featuredTitle}>DESIGN YOUR OWN</h2>
+      <div className={styles.sliderWrapper}>
+        <div className={styles.productsGrid} id="featuredGrid">
+          {products.slice(0, 8).map((product, idx) => (
+            <Link key={product.id} href={`/shop?q=${encodeURIComponent(product.name)}`} className={styles.productCard}>
+              <div className={styles.imageContainer}>
+                <Image 
+                  src={(product.images && product.images.length > 0) ? product.images[0] : (product.image_url || "/images/hero.png")} 
+                  alt={product.name} 
+                  fill 
+                  className={styles.primaryImage}
+                  sizes="(max-width: 768px) 100vw, 25vw"
+                  priority={idx === 0}
+                />
+                {product.images && product.images.length > 1 && (
+                  <Image 
+                    src={product.images[1]} 
+                    alt={product.name} 
+                    fill 
+                    className={styles.secondaryImage}
+                    sizes="(max-width: 768px) 100vw, 25vw"
+                  />
+                )}
+              </div>
+              <h3 className={styles.productName}>{product.name}</h3>
+              <div className={styles.productStars}>
+                <div className={styles.starsOnly}>
+                  <Star /><Star /><Star /><Star /><Star />
+                </div>
+                <span className={styles.productReviews}>({reviews[idx % 4] || 0})</span>
+              </div>
+              <p className={styles.productPrice}>from {parseFloat(product.price).toFixed(2)} €</p>
+            </Link>
+          ))}
+        </div>
+        <button
+          className={`${styles.sliderArrow} ${styles.arrowLeft}`}
+          onClick={() => {
+            const el = document.getElementById('featuredGrid');
+            if (el) el.scrollBy({ left: -300, behavior: 'smooth' });
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <button
+          className={`${styles.sliderArrow} ${styles.arrowRight}`}
+          onClick={() => {
+            const el = document.getElementById('featuredGrid');
+            if (el) el.scrollBy({ left: 300, behavior: 'smooth' });
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+      <div className={styles.viewAllContainer}>
+        <Link href="/shop" className={styles.viewAllLink}>
+          SHOP ALL JEWELRY
+        </Link>
+      </div>
+    </section>
+  );
+});
+FeaturedProductsSection.displayName = 'FeaturedProductsSection';
+
+const CategoriesSection = React.memo(({ cmsContent }: any) => (
+  <section className={styles.categoryGrid}>
+    <Link href="/shop?category=sacs" className={styles.categoryCard}>
+      <Image src={cmsContent.cat1_image || "/images/bags.png"} alt="Sacs" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
+      <div className={styles.cardContent}>
+        <h2 className={styles.hollowTitle}>{cmsContent.cat1_title || "Sacs"}</h2>
+        <h3 className={styles.solidTitle}>{cmsContent.cat1_title?.toLowerCase() || "sacs"}</h3>
+        <span className={styles.cardLink}>Plus d&apos;informations</span>
+      </div>
+    </Link>
+    <Link href="/shop?category=vêtements" className={styles.categoryCard}>
+      <Image src={cmsContent.cat2_image || "/images/clothing.png"} alt="Vêtements" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
+      <div className={styles.cardContent}>
+        <h2 className={styles.hollowTitle}>{cmsContent.cat2_title || "Vêtements"}</h2>
+        <h3 className={styles.solidTitle}>{cmsContent.cat2_title?.toLowerCase() || "vêtements"}</h3>
+        <span className={styles.cardLink}>Plus d&apos;informations</span>
+      </div>
+    </Link>
+    <Link href="/shop?category=bijoux" className={styles.categoryCard}>
+      <Image src={cmsContent.cat3_image || "/images/jewelry.png"} alt="Bijoux" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
+      <div className={styles.cardContent}>
+        <h2 className={styles.hollowTitle}>{cmsContent.cat3_title || "Bijoux"}</h2>
+        <h3 className={styles.solidTitle}>{cmsContent.cat3_title?.toLowerCase() || "bijoux"}</h3>
+        <span className={styles.cardLink}>Plus d&apos;informations</span>
+      </div>
+    </Link>
+    <Link href="/shop?category=chaussures" className={styles.categoryCard}>
+      <Image src={cmsContent.cat4_image || "/images/shoes.png"} alt="Chaussures" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
+      <div className={styles.cardContent}>
+        <h2 className={styles.hollowTitle}>{cmsContent.cat4_title || "Chaussures"}</h2>
+        <h3 className={styles.solidTitle}>{cmsContent.cat4_title?.toLowerCase() || "chaussures"}</h3>
+        <span className={styles.cardLink}>Plus d&apos;informations</span>
+      </div>
+    </Link>
+  </section>
+));
+
+const InstagramSection = React.memo(({ cmsContent }: any) => (
+  <section className={styles.instagramFeed}>
+    <h2 className={styles.instaHeading}>Follow us on Instagram</h2>
+    <div className={styles.instaSliderContainer}>
+      <button
+        className={`${styles.instaArrow} ${styles.instaArrowLeft}`}
+        onClick={() => {
+          const el = document.getElementById('instaTrack');
+          if (el) el.scrollBy({ left: -370, behavior: 'smooth' });
+        }}
+        aria-label="Scroll left"
+      >
+        &#8592;
+      </button>
+      <div className={styles.instaFeedWrapper} id="instaTrack">
+        {Object.keys(cmsContent)
+          .filter(key => key.startsWith('instagram_post_'))
+          .sort((a, b) => parseInt(a.split('_')[2]) - parseInt(b.split('_')[2]))
+          .map(key => {
+            let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
+            try { postData = JSON.parse(cmsContent[key]); } catch (e) { }
+            return (
+              <Link key={key} href={postData.instagram_url} target="_blank" className={styles.instaCard}>
+                <Image src={postData.image_url} alt="Instagram Post" fill sizes="(max-width: 768px) 75vw, 320px" className={styles.instaImg} loading="lazy" />
+                <div className={styles.instaOverlay}><Instagram className={styles.instaIcon} size={32} /></div>
+              </Link>
+            );
+          })}
+      </div>
+      <button
+        className={`${styles.instaArrow} ${styles.instaArrowRight}`}
+        onClick={() => {
+          const el = document.getElementById('instaTrack');
+          if (el) el.scrollBy({ left: 370, behavior: 'smooth' });
+        }}
+        aria-label="Scroll right"
+      >
+        &#8594;
+      </button>
+    </div>
+    <a href="https://instagram.com" target="_blank" className={styles.joinUsBtn}><Instagram size={20} /> JOIN US</a>
+  </section>
+));
 
 export default function Home() {
   const { data: session } = useSession();
@@ -20,6 +210,7 @@ export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [cmsContent, setCmsContent] = useState<any>({});
   const [categories, setCategories] = useState<any[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [modalEmail, setModalEmail] = useState("");
@@ -27,49 +218,32 @@ export default function Home() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [isSubmittingChat, setIsSubmittingChat] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [chatInterval, setChatInterval] = useState<any>(null);
+  const [isSubmittingChat, setIsSubmittingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const defaultImages = [
+  const heroImagesRef = useRef<string[]>([
     "/images/hero.png",
     "/images/clothing.png",
     "/images/bags.png",
     "/images/shoes.png"
-  ];
-
-  const [heroImages, setHeroImages] = useState(defaultImages);
+  ]);
+  const [heroImages, setHeroImages] = useState(heroImagesRef.current);
 
   const handleSubscribe = async (email: string, isModal: boolean) => {
     if (!email || !email.includes('@')) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Erreur',
-        text: 'Veuillez entrer une adresse e-mail valide.',
-        confirmButtonColor: '#000'
-      });
+      Swal.fire({ icon: 'error', title: 'Erreur', text: 'Veuillez entrer une adresse e-mail valide.', confirmButtonColor: '#000' });
       return;
     }
-
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/graphql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation($email: String!) { subscribeNewsletter(email: $email) }`,
-          variables: { email }
-        })
+        body: JSON.stringify({ query: `mutation($email: String!) { subscribeNewsletter(email: $email) }`, variables: { email } })
       });
       const data = await res.json();
       if (data.data?.subscribeNewsletter) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Succès',
-          text: 'Merci pour votre inscription !',
-          confirmButtonColor: '#000'
-        });
+        Swal.fire({ icon: 'success', title: 'Succès', text: 'Merci pour votre inscription !', confirmButtonColor: '#000' });
         setUserEmail(email);
         localStorage.setItem('seaura_user_email', email);
         if (isModal) setIsEmailModalOpen(false);
@@ -78,23 +252,26 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Erreur',
-        text: 'Une erreur est survenue. Veuillez réessayer.',
-        confirmButtonColor: '#000'
-      });
+      Swal.fire({ icon: 'error', title: 'Erreur', text: 'Une erreur est survenue. Veuillez réessayer.', confirmButtonColor: '#000' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Fetch data — show loading screen for min 3s branding, but fetch in parallel
   useEffect(() => {
-    // Fetch Content and Categories in parallel
-    fetch('/api/graphql', {
+    const minTimer = new Promise<void>(resolve => setTimeout(resolve, 3000));
+
+    const dataFetch = fetch('/api/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: '{ homeContent { key value type } categories { id name } }' })
+      body: JSON.stringify({ 
+        query: `query { 
+          homeContent { key value type } 
+          categories { id name } 
+          products { id name price image_url images }
+        }` 
+      })
     })
       .then(res => res.json())
       .then(data => {
@@ -104,54 +281,53 @@ export default function Home() {
             return acc;
           }, {});
           setCmsContent(contentMap);
-          const cmsImages = [];
+          const cmsImages: string[] = [];
           if (contentMap.hero_image_1) cmsImages.push(contentMap.hero_image_1);
           if (contentMap.hero_image_2) cmsImages.push(contentMap.hero_image_2);
-          if (cmsImages.length > 0) setHeroImages(cmsImages);
+          if (cmsImages.length > 0) {
+            heroImagesRef.current = cmsImages;
+            setHeroImages(cmsImages);
+          }
         }
-        if (data.data?.categories) {
-          setCategories(data.data.categories);
-        }
-        setIsLoading(false);
-      });
+        if (data.data?.categories) setCategories(data.data.categories);
+        if (data.data?.products) setFeaturedProducts(data.data.products);
+      })
+      .catch(console.error);
+
+    Promise.all([minTimer, dataFetch]).then(() => setIsLoading(false));
 
     const storedEmail = localStorage.getItem('seaura_user_email');
     if (storedEmail) {
       setUserEmail(storedEmail);
     } else {
-      // Auto-open modal for new visitors on home page
       setIsEmailModalOpen(true);
     }
 
     const handleScroll = () => {
-      const scrolled = window.scrollY > 50;
-      const showTop = window.scrollY > 400;
-      
-      setIsScrolled(prev => prev !== scrolled ? scrolled : prev);
-      setShowScrollTop(prev => prev !== showTop ? showTop : prev);
+      setIsScrolled(window.scrollY > 50);
+      setShowScrollTop(window.scrollY > 400);
     };
+    const handleKeydown = (e: KeyboardEvent) => { if (e.key === "Escape") setIsEmailModalOpen(false); };
 
-    const handleKeydown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsEmailModalOpen(false);
-    };
-
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("keydown", handleKeydown);
-
-    const timer = setInterval(() => {
-      setCurrentHeroIndex((prev) => (prev + 1) % heroImages.length);
-    }, 4000);
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("keydown", handleKeydown);
-      clearInterval(timer);
     };
-  }, [heroImages.length]);
+  }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  // Hero slideshow — stable interval, reads length from ref
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHeroIndex(prev => (prev + 1) % heroImagesRef.current.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   const fetchChatHistory = async () => {
     if (!userEmail) return;
@@ -170,18 +346,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (userEmail && isChatOpen) {
-      fetchChatHistory();
-      const interval = setInterval(fetchChatHistory, 3000);
-      setChatInterval(interval);
-      return () => clearInterval(interval);
-    }
+    if (!userEmail || !isChatOpen) return;
+    fetchChatHistory();
+    const interval = setInterval(fetchChatHistory, 5000);
+    return () => clearInterval(interval);
   }, [userEmail, isChatOpen]);
 
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
   const handleSendChat = async () => {
@@ -192,9 +364,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `mutation($email: String!, $content: String!, $role: String!) { 
-            sendChatMessage(email: $email, content: $content, role: $role) { id }
-          }`,
+          query: `mutation($email: String!, $content: String!, $role: String!) { sendChatMessage(email: $email, content: $content, role: $role) { id } }`,
           variables: { email: userEmail, content: chatInput, role: 'CLIENT' }
         })
       });
@@ -205,11 +375,20 @@ export default function Home() {
   };
 
   if (isLoading) {
-    return <LoadingScreen duration={3000} onComplete={() => setIsLoading(false)} />;
+    return <LoadingScreen duration={3000} onComplete={() => { }} />;
   }
 
+  const handleIsSearchOpen = (val: boolean) => {
+    setIsSearchOpen(val);
+    if (val) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+  };
+
   return (
-    <main className={`${styles.main} ${isSearchOpen ? styles.noScroll : ""}`}>
+    <main className={styles.main}>
       {/* Header */}
       <header className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""}`}>
         <div className={styles.headerLayout}>
@@ -222,29 +401,10 @@ export default function Home() {
             <div className={styles.logo}>
               {cmsContent.brand_logo || "S E A U R A"}
             </div>
-            {/* <Link href="/shop" className="hidden lg:block ml-10 text-[10px] font-bold tracking-[0.3em] uppercase opacity-40 hover:opacity-100 transition-all">BOUTIQUE</Link> */}
           </div>
 
           <div className={`${styles.headerCenter} ${isSearchOpen ? styles.searchActive : ""}`}>
-            <div className={styles.searchWrapper}>
-              <div className={styles.searchPill} onClick={() => setIsSearchOpen(true)}>
-                <svg className={styles.searchIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="M21 21l-4.35-4.35" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="RECHERCHE"
-                  className={styles.searchInput}
-                  autoFocus={isSearchOpen}
-                />
-              </div>
-              {isSearchOpen && (
-                <button className={styles.cancelButton} onClick={() => setIsSearchOpen(false)}>
-                  Annuler
-                </button>
-              )}
-            </div>
+            <Search isScrolled={isScrolled} onOpenChange={handleIsSearchOpen} />
           </div>
 
           <div className={styles.headerRight}>
@@ -257,33 +417,24 @@ export default function Home() {
             </Link>
           </div>
         </div>
-
-        {/* Search Modal Content */}
-        {isSearchOpen && (
-          <div className={styles.searchModalContent}>
-            <div className={styles.searchInner}>
-              <h4 className={styles.trendingTitle}>RECHERCHES TENDANCES</h4>
-              <div className={styles.tagCloud}>
-                {['sacs', 'chaussures', 'bijoux', 'vêtements', 'nouvelle collection', 'bijoux en acier', 'sacs à main'].map(tag => (
-                  <span key={tag} className={styles.searchTag}>{tag}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </header>
 
       {/* Hamburger Menu Overlay */}
-      <div className={`${styles.menuOverlay} ${isMenuOpen ? styles.menuVisible : ""}`}>
-        <div className={styles.menuDrawer}>
+      <div
+        className={`${styles.menuOverlay} ${isMenuOpen ? styles.menuVisible : ""}`}
+        onClick={() => setIsMenuOpen(false)}
+      >
+        <div className={styles.menuDrawer} onClick={(e) => e.stopPropagation()}>
           <button className={styles.closeButton} onClick={() => setIsMenuOpen(false)}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
+
+          <div className={styles.menuBrand}>S E A U R A</div>
+
           <nav className={styles.menuNav}>
             <ul>
-              <li><Link href="/shop" onClick={() => setIsMenuOpen(false)}>BOUTIQUE</Link></li>
               <li><Link href="/shop" onClick={() => setIsMenuOpen(false)}>NEW IN</Link></li>
               {categories.map((cat) => (
                 <li key={cat.id}>
@@ -302,142 +453,29 @@ export default function Home() {
       </div>
 
       {/* Hero Section */}
-      <section className={styles.hero}>
-        <div className={styles.heroImageWrapper}>
-          {heroImages.map((src, idx) => {
-            // Only render current and next image for performance
-            const isVisible = idx === currentHeroIndex || idx === (currentHeroIndex + 1) % heroImages.length;
-            if (!isVisible && idx !== 0) return null; // Always keep the first prioritized image if needed, or better, only render when visible
-            
-            return (
-              <Image
-                key={src}
-                src={src}
-                alt={`Collection ${idx + 1}`}
-                fill
-                priority={idx === 0}
-                quality={85}
-                sizes="100vw"
-                className={`${styles.heroImage} ${idx === currentHeroIndex ? styles.active : ""}`}
-              />
-            );
-          })}
-          <div className={styles.heroOverlay}>
-            <h1 className={styles.heroTitle}>{cmsContent.hero_title || "NEW IN"}</h1>
-            <a href="#" className={styles.heroLink}>{cmsContent.hero_link_text || "Plus d'informations"}</a>
-          </div>
-        </div>
-      </section>
+      <HeroSection cmsContent={cmsContent} heroImages={heroImages} currentHeroIndex={currentHeroIndex} />
 
       {/* Category Grid */}
-      <section className={styles.categoryGrid}>
-        <Link href="/shop?category=sacs" className={styles.categoryCard}>
-          <Image src={cmsContent.cat1_image || "/images/bags.png"} alt="Sacs" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} />
-          <div className={styles.cardContent}>
-            <h2 className={styles.hollowTitle}>{cmsContent.cat1_title || "Sacs"}</h2>
-            <h3 className={styles.solidTitle}>{cmsContent.cat1_title?.toLowerCase() || "sacs"}</h3>
-            <span className={styles.cardLink}>Plus d&apos;informations</span>
-          </div>
-        </Link>
-        <Link href="/shop?category=vêtements" className={styles.categoryCard}>
-          <Image src={cmsContent.cat2_image || "/images/clothing.png"} alt="Vêtements" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} />
-          <div className={styles.cardContent}>
-            <h2 className={styles.hollowTitle}>{cmsContent.cat2_title || "Vêtements"}</h2>
-            <h3 className={styles.solidTitle}>{cmsContent.cat2_title?.toLowerCase() || "vêtements"}</h3>
-            <span className={styles.cardLink}>Plus d&apos;informations</span>
-          </div>
-        </Link>
-        <Link href="/shop?category=bijoux" className={styles.categoryCard}>
-          <Image src={cmsContent.cat3_image || "/images/jewelry.png"} alt="Bijoux" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} />
-          <div className={styles.cardContent}>
-            <h2 className={styles.hollowTitle}>{cmsContent.cat3_title || "Bijoux"}</h2>
-            <h3 className={styles.solidTitle}>{cmsContent.cat3_title?.toLowerCase() || "bijoux"}</h3>
-            <span className={styles.cardLink}>Plus d&apos;informations</span>
-          </div>
-        </Link>
-        <Link href="/shop?category=chaussures" className={styles.categoryCard}>
-          <Image src={cmsContent.cat4_image || "/images/shoes.png"} alt="Chaussures" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} />
-          <div className={styles.cardContent}>
-            <h2 className={styles.hollowTitle}>{cmsContent.cat4_title || "Chaussures"}</h2>
-            <h3 className={styles.solidTitle}>{cmsContent.cat4_title?.toLowerCase() || "chaussures"}</h3>
-            <span className={styles.cardLink}>Plus d&apos;informations</span>
-          </div>
-        </Link>
-      </section>
+      <CategoriesSection cmsContent={cmsContent} />
 
-      {/* Newsletter Section */}
+      {/* Featured Products Section */}
+      <FeaturedProductsSection products={featuredProducts} />
+
+      {/* Video Section */}
       <section className={styles.newsletter}>
-        <div className={styles.newsletterContent}>
-          <h2 className={styles.newsletterTitle}>{cmsContent.newsletter_title || "Abonnez-vous à notre newsletter"}</h2>
-          <form className={styles.newsletterForm} onSubmit={(e) => { e.preventDefault(); handleSubscribe(inlineEmail, false); }}>
-            <input
-              type="email"
-              placeholder="E-mail"
-              className={styles.newsletterInput}
-              value={inlineEmail}
-              onChange={(e) => setInlineEmail(e.target.value)}
-            />
-            <div className={styles.checkboxWrapper}>
-              <input type="checkbox" id="terms" required />
-              <label htmlFor="terms">Je déclare avoir lu et compris la <a>Politique de confidentialité</a>.</label>
-            </div>
-            <button className={styles.newsletterSubmit} disabled={isSubmitting}>
-              {isSubmitting ? "ENVOI..." : "INSCRIVEZ-VOUS"}
-            </button>
-          </form>
-        </div>
+        <video
+          className={styles.newsletterVideo}
+          src="https://withlyberty.com/cdn/shop/videos/c/vp/db413def4bfa4d05bbd6d17c0c1ade19/db413def4bfa4d05bbd6d17c0c1ade19.HD-1080p-7.2Mbps-73320821.mp4?v=0"
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+
       </section>
 
       {/* Instagram Feed Section */}
-      <section className={styles.instagramFeed}>
-        <h2 className={styles.instaHeading}>Follow us on Instagram</h2>
-        
-        <div className={styles.instaFeedWrapper}>
-          <div className={styles.instaTicker}>
-            {[...Array(2)].map((_, loopIdx) => (
-              <Fragment key={loopIdx}>
-                {Object.keys(cmsContent)
-                  .filter(key => key.startsWith('instagram_post_'))
-                  .sort((a, b) => {
-                    const numA = parseInt(a.split('_')[2]);
-                    const numB = parseInt(b.split('_')[2]);
-                    return numA - numB;
-                  })
-                  .map(key => {
-                    let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
-                    try {
-                      postData = JSON.parse(cmsContent[key]);
-                    } catch (e) { }
-
-                    return (
-                      <Link
-                        key={`${loopIdx}-${key}`}
-                        href={postData.instagram_url}
-                        target="_blank"
-                        className={styles.instaCard}
-                      >
-                        <Image
-                          src={postData.image_url}
-                          alt={`Instagram Post`}
-                          fill
-                          sizes="320px"
-                          className={styles.instaImg}
-                        />
-                        <div className={styles.instaOverlay}>
-                          <Instagram className={styles.instaIcon} size={32} />
-                        </div>
-                      </Link>
-                    );
-                  })}
-              </Fragment>
-            ))}
-          </div>
-        </div>
-
-        <a href="https://instagram.com" target="_blank" className={styles.joinUsBtn}>
-          <Instagram size={20} /> JOIN US
-        </a>
-      </section>
+      <InstagramSection cmsContent={cmsContent} />
 
       {/* Footer */}
       <footer className={styles.footer}>
@@ -455,7 +493,6 @@ export default function Home() {
             <ul>
               <li><a href="#">À propos</a></li>
               <li><a href="#">Carrières</a></li>
-              <li><a href="#">Boutiques</a></li>
             </ul>
           </div>
           <div className={styles.footerCol}>
@@ -584,6 +621,13 @@ export default function Home() {
       >
         <ArrowUp size={24} />
       </button>
+      {/* Discount Badge */}
+      <div
+        className={styles.discountBadge}
+        onClick={() => setIsEmailModalOpen(true)}
+      >
+        10% OFF!
+      </div>
     </main>
   );
 }

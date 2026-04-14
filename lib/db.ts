@@ -13,22 +13,7 @@ export const initDb = async () => {
   try {
     const client = await pool.connect();
     
-    // Quick check: If products table exists, we are likely fully initialized
-    const tableExists = await client.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'products'
-      );
-    `);
-    
-    if (tableExists.rows[0].exists) {
-      console.log('Database already initialized, skipping checks.');
-      client.release();
-      isInitialized = true;
-      return;
-    }
-
-    isInitialized = true;
+    console.log('Checking database schema and performance indexes...');
 
     // Create User Table
     await client.query(`
@@ -65,66 +50,33 @@ export const initDb = async () => {
       );
     `);
 
-    // Migration: Add sizes column if it doesn't exist
+    // Migrations / Schema Updates
     await client.query(`
       DO $$ 
       BEGIN 
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sizes') THEN
           ALTER TABLE products ADD COLUMN sizes JSONB DEFAULT '[]';
         END IF;
-
-        -- Repair: Set sizes to [] for rows where it is NULL
-        UPDATE products SET sizes = '[]' WHERE sizes IS NULL;
-      END $$;
-    `);
-
-    // Migration: Add images column if it doesn't exist
-    await client.query(`
-      DO $$ 
-      BEGIN 
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='images') THEN
           ALTER TABLE products ADD COLUMN images JSONB DEFAULT '[]';
         END IF;
-
-        -- Repair: Set images to [] for rows where it is NULL
-        UPDATE products SET images = '[]' WHERE images IS NULL;
-      END $$;
-    `);
-
-    // Migration: Change colors column to JSONB if it's text[] or add it
-    await client.query(`
-      DO $$ 
-      BEGIN 
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='colors') THEN
           ALTER TABLE products ADD COLUMN colors JSONB DEFAULT '[]';
-        ELSIF (SELECT data_type FROM information_schema.columns WHERE table_name='products' AND column_name='colors') = 'ARRAY' THEN
-          ALTER TABLE products ALTER COLUMN colors TYPE JSONB USING to_jsonb(colors);
-          ALTER TABLE products ALTER COLUMN colors SET DEFAULT '[]';
         END IF;
       END $$;
     `);
 
-    // Create Home Content Table (CMS functionality)
+    // Create Home Content Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS home_content (
         id SERIAL PRIMARY KEY,
         key VARCHAR(100) UNIQUE NOT NULL,
         value TEXT NOT NULL,
-        type VARCHAR(50) DEFAULT 'TEXT', -- TEXT, IMAGE, JSON
-        section VARCHAR(100), -- hero, newsletter, categories, branding, instagram, etc.
+        type VARCHAR(50) DEFAULT 'TEXT',
+        section VARCHAR(100),
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // Default Instagram Content
-    for (let i = 1; i <= 4; i++) {
-      await client.query(`
-          INSERT INTO home_content (key, value, type, section) 
-          VALUES ($1, $2, 'JSON', 'instagram')
-          ON CONFLICT (key) DO NOTHING`,
-        [`instagram_post_${i}`, JSON.stringify({ image_url: `/images/hero.png`, instagram_url: 'https://instagram.com' })]
-      );
-    }
 
     // Create Orders Table
     await client.query(`
@@ -134,6 +86,7 @@ export const initDb = async () => {
         total DECIMAL(10, 2) NOT NULL,
         items JSONB NOT NULL,
         status VARCHAR(50) DEFAULT 'PENDING',
+        payment_status VARCHAR(50) DEFAULT 'UNPAID',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -146,91 +99,27 @@ export const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_email)
       );
-    `);
-
-    await client.query(`
       CREATE TABLE IF NOT EXISTS chat_messages (
         id SERIAL PRIMARY KEY,
         session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE,
-        sender_role VARCHAR(20) NOT NULL, -- 'CLIENT' or 'ADMIN'
+        sender_role VARCHAR(20) NOT NULL,
         content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // Create Settings Table
+    // Performance Optimizations (CRITICAL FOR SEARCH SPEED)
+    console.log('Applying search performance optimizations...');
     await client.query(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key VARCHAR(100) PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Default SMTP settings from ENV or defaults
-    const defaultSettings = [
-      { key: 'SMTP_HOST', value: process.env.SMTP_HOST || 'smtp.gmail.com' },
-      { key: 'SMTP_PORT', value: process.env.SMTP_PORT || '587' },
-      { key: 'SMTP_SECURE', value: process.env.SMTP_SECURE || 'false' },
-      { key: 'SMTP_USER', value: process.env.SMTP_USER || '' },
-      { key: 'SMTP_PASS', value: process.env.SMTP_PASS || '' },
-      { key: 'SMTP_FROM_NAME', value: 'Boutique Seaura' },
-    ];
-
-    for (const s of defaultSettings) {
-      await client.query(
-        "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING",
-        [s.key, s.value]
-      );
-    }
-
-    // Create Carts Table (Live shopping tracking)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS carts (
-        id SERIAL PRIMARY KEY,
-        session_id VARCHAR(255) UNIQUE NOT NULL,
-        items JSONB DEFAULT '[]',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_carts_session ON carts(session_id);
-    `);
-
-    // Create Wishlists Table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS wishlists (
-        id SERIAL PRIMARY KEY,
-        user_email VARCHAR(255) UNIQUE NOT NULL,
-        items JSONB DEFAULT '[]',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_wishlists_user ON wishlists(user_email);
-    `);
-
-    // Create Charges Table (Accounting/Expenses)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS charges (
-        id SERIAL PRIMARY KEY,
-        description VARCHAR(255) NOT NULL,
-        amount DECIMAL(10, 2) NOT NULL,
-        category VARCHAR(100),
-        date DATE DEFAULT CURRENT_DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // Migration: Add payment_status to orders if it doesn't exist
-    await client.query(`
-      DO $$ 
-      BEGIN 
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='payment_status') THEN
-          ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID';
-        END IF;
-      END $$;
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING GIN (name gin_trgm_ops);
+      CREATE INDEX IF NOT EXISTS idx_products_description_trgm ON products USING GIN (description gin_trgm_ops);
     `);
 
     client.release();
-    console.log('Database initialized successfully');
+    isInitialized = true;
+    console.log('Database optimizations applied successfully.');
   } catch (err) {
-    console.error('Error initializing database:', err);
+    console.error('Error during database optimization:', err);
   }
 };

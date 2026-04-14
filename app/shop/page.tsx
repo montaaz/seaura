@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ShoppingBag, Search, User, ArrowUp, Trash2, Plus, ChevronRight, Heart, Instagram } from "lucide-react";
+import { ShoppingBag, Search, User, ArrowUp, Trash2, Plus, Heart, Instagram, ChevronRight, ChevronLeft } from "lucide-react";
 import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -36,6 +36,8 @@ function Shop() {
     const [cmsContent, setCmsContent] = useState<Record<string, string>>({});
     const searchParams = useSearchParams();
     const categoryQuery = searchParams.get('category');
+    const termQuery = searchParams.get('q');
+
 
     const filteredProducts = products.filter(p => {
         // If searching, ignore category filter to show all matches across shop
@@ -54,7 +56,7 @@ function Shop() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products { id name price image_url description category_id colors { name hex } images sizes } categories { id name } homeContent { key value } }'
+                        query: '{ products { id name price image_url images description category_id colors { name hex } sizes } categories { id name } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -160,7 +162,10 @@ function Shop() {
             );
             if (found) setActiveFilter(found.id);
         }
-    }, [categoryQuery, categories]);
+        if (termQuery) {
+            setSearchQuery(termQuery);
+        }
+    }, [categoryQuery, termQuery, categories]);
 
     const toggleWishlist = (product: any) => {
         setWishlist(prev => {
@@ -286,6 +291,13 @@ function Shop() {
     const [activeProduct, setActiveProduct] = useState<any>(null);
     const [selectedSize, setSelectedSize] = useState("M");
     const [selectedColorName, setSelectedColorName] = useState("Noir");
+    const [selectedImageIndex0, setSelectedImageIndex0] = useState(0);
+    const [selectedImageIndex1, setSelectedImageIndex1] = useState(0);
+
+    useEffect(() => {
+        setSelectedImageIndex0(0);
+        setSelectedImageIndex1(0);
+    }, [activeFilter, searchQuery]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -396,7 +408,7 @@ function Shop() {
                                                     onClick={() => { setIsSearchOpen(false); scrollToTop(); }}
                                                 >
                                                     <div className="w-16 h-16 bg-white rounded-2xl overflow-hidden relative shadow-sm transition-transform group-hover:scale-105">
-                                                        <Image src={p.image_url || "/images/clothing.png"} alt={p.name} fill className="object-cover" />
+                                                        <Image src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} alt={p.name} fill className="object-cover" />
                                                     </div>
                                                     <div className="flex-1">
                                                         <h5 className="text-sm font-bold tracking-tight">{p.name}</h5>
@@ -460,14 +472,28 @@ function Shop() {
                     <div className={styles.productDisplay}>
                         <div className={styles.mainImageWrapper}>
                             <Image
-                                src={filteredProducts[0].image_url || "/images/clothing.png"}
+                                src={(filteredProducts[0].images && filteredProducts[0].images.length > 0) ? filteredProducts[0].images[selectedImageIndex0] : (filteredProducts[0].image_url || "/images/clothing.png")}
                                 alt={filteredProducts[0].name}
                                 fill
                                 className={styles.featuredImg}
                                 sizes="(max-width: 1200px) 100vw, 55vw"
                                 priority
+                                quality={85}
                             />
                         </div>
+                        {filteredProducts[0].images && filteredProducts[0].images.length > 1 && (
+                            <div className={styles.thumbnailGallery}>
+                                {filteredProducts[0].images.map((img: string, idx: number) => (
+                                    <div 
+                                        key={idx} 
+                                        className={`${styles.thumbnail} ${selectedImageIndex0 === idx ? styles.thumbnailActive : ""}`}
+                                        onClick={() => setSelectedImageIndex0(idx)}
+                                    >
+                                        <Image src={img} alt={`Thumbnail ${idx}`} fill className="object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <div className={styles.productDetails}>
                         <span className={styles.detailCategory}>BOUTIQUE / ARTISAN MASTERPIECE</span>
@@ -565,13 +591,26 @@ function Shop() {
                     <div className={styles.productDisplay}>
                         <div className={styles.mainImageWrapper}>
                             <Image
-                                src={filteredProducts[1].image_url || "/images/clothing.png"}
+                                src={(filteredProducts[1].images && filteredProducts[1].images.length > 0) ? filteredProducts[1].images[selectedImageIndex1] : (filteredProducts[1].image_url || "/images/clothing.png")}
                                 alt={filteredProducts[1].name}
                                 fill
                                 className={styles.featuredImg}
                                 sizes="(max-width: 1200px) 100vw, 55vw"
                             />
                         </div>
+                        {filteredProducts[1].images && filteredProducts[1].images.length > 1 && (
+                            <div className={styles.thumbnailGallery}>
+                                {filteredProducts[1].images.map((img: string, idx: number) => (
+                                    <div 
+                                        key={idx} 
+                                        className={`${styles.thumbnail} ${selectedImageIndex1 === idx ? styles.thumbnailActive : ""}`}
+                                        onClick={() => setSelectedImageIndex1(idx)}
+                                    >
+                                        <Image src={img} alt={`Thumbnail ${idx}`} fill className="object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <div className={styles.productDetails}>
                         <span className={styles.detailCategory}>ÉDITION LIMITÉE / 2026</span>
@@ -588,7 +627,7 @@ function Shop() {
             <div className={`${styles.stickyBarContainer} ${activeProduct ? styles.stickyBarVisible : ""}`}>
                 <div className={styles.stickyInfo}>
                     <div className={styles.stickyThumb} style={{ position: 'relative' }}>
-                        <Image src={activeProduct?.image_url || "/images/clothing.png"} alt="Preview" fill sizes="60px" className="object-cover" />
+                        <Image src={(activeProduct?.images && activeProduct.images.length > 0) ? activeProduct.images[0] : (activeProduct?.image_url || "/images/clothing.png")} alt="Preview" fill sizes="60px" className="object-cover" />
                     </div>
                     <div className={styles.stickyText}>
                         <h4>{activeProduct?.name}</h4>
@@ -612,7 +651,7 @@ function Shop() {
                             <div className={styles.gridImageWrapper}>
                                 <div className={styles.onSale}>NEW</div>
                                 <Image
-                                    src={p.image_url || "/images/clothing.png"}
+                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")}
                                     alt={p.name}
                                     fill
                                     className={styles.gridImg}
@@ -647,54 +686,44 @@ function Shop() {
                 </div>
             </section>
 
-            {/* Instagram Feed Section */}
             <section className={styles.instagramFeed}>
-                <div className="text-center mb-16">
-                    <span className={styles.sectionTag}>SOCIAL GALLERY</span>
-                    <h2 className={styles.sectionTitle} style={{ fontSize: '64px' }}>Follow us on Instagram</h2>
-                </div>
-                
-                <div className={styles.instaFeedWrapper}>
-                    <div className={styles.instaTicker}>
-                        {[...Array(2)].map((_, loopIdx) => (
-                            <Fragment key={loopIdx}>
-                                {Object.keys(cmsContent)
-                                    .filter(key => key.startsWith('instagram_post_'))
-                                    .sort((a, b) => {
-                                        const numA = parseInt(a.split('_')[2]);
-                                        const numB = parseInt(b.split('_')[2]);
-                                        return numA - numB;
-                                    })
-                                    .map(key => {
-                                        let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
-                                        try {
-                                            postData = JSON.parse(cmsContent[key]);
-                                        } catch (e) { }
-
-                                        return (
-                                            <div key={`${loopIdx}-${key}`} className={styles.instaCard}>
-                                                <Image
-                                                    src={postData.image_url}
-                                                    alt={`Instagram Post`}
-                                                    fill
-                                                    sizes="320px"
-                                                    className={styles.instaImg}
-                                                />
-                                                <div className={styles.instaOverlay}>
-                                                    <Instagram size={30} />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                            </Fragment>
-                        ))}
+                <h2 className={styles.instaHeading}>Follow us on Instagram</h2>
+                <div className={styles.instaSliderContainer}>
+                    <button
+                        className={`${styles.instaArrow} ${styles.instaArrowLeft}`}
+                        onClick={() => {
+                            const el = document.getElementById('instaTrack');
+                            if (el) el.scrollBy({ left: -370, behavior: 'smooth' });
+                        }}
+                        aria-label="Scroll left"
+                    >
+                        &#8592;
+                    </button>
+                    <div className={styles.instaFeedWrapper} id="instaTrack">
+                        {Object.keys(cmsContent)
+                            .filter(key => key.startsWith('instagram_post_'))
+                            .sort((a, b) => parseInt(a.split('_')[2]) - parseInt(b.split('_')[2]))
+                            .map(key => {
+                                let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
+                                try { postData = JSON.parse(cmsContent[key]); } catch (e) { }
+                                return (
+                                    <Link key={key} href={postData.instagram_url} target="_blank" className={styles.instaCard}>
+                                        <Image src={postData.image_url} alt="Instagram Post" fill sizes="(max-width: 768px) 75vw, 320px" className={styles.instaImg} loading="lazy" />
+                                        <div className={styles.instaOverlay}><Instagram className={styles.instaIcon} size={32} /></div>
+                                    </Link>
+                                );
+                            })}
                     </div>
-                </div>
-
-                <div className="flex justify-center mt-12">
-                    <a href="https://instagram.com" target="_blank" className={styles.buyBtn} style={{ padding: '20px 60px' }}>
-                        JOIN OUR UNIVERSE
-                    </a>
+                    <button
+                        className={`${styles.instaArrow} ${styles.instaArrowRight}`}
+                        onClick={() => {
+                            const el = document.getElementById('instaTrack');
+                            if (el) el.scrollBy({ left: 370, behavior: 'smooth' });
+                        }}
+                        aria-label="Scroll right"
+                    >
+                        &#8594;
+                    </button>
                 </div>
             </section>
 
@@ -756,7 +785,7 @@ function Shop() {
                             <div key={idx} className={styles.cartItem}>
                                 <button onClick={() => removeFromCart(idx)} className="mr-6 p-2 text-red-500/40 hover:text-red-600 transition-all"><Trash2 size={18} /></button>
                                 <div className={styles.cartItemThumb} style={{ position: 'relative' }}>
-                                    <Image src={item.image_url || "/images/clothing.png"} alt={item.name} fill sizes="80px" className="object-cover" />
+                                    <Image src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/images/clothing.png")} alt={item.name} fill sizes="80px" className="object-cover" />
                                 </div>
                                 <div className={styles.cartItemInfo}>
                                     <h4>{item.name}</h4>

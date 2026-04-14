@@ -352,7 +352,7 @@ function ProductManager() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: '{ products { id name price image_url description category_id colors { name hex } images sizes } categories { id name } }'
+                query: '{ products { id name price image_url images description category_id colors { name hex } sizes } categories { id name } }'
             })
         });
         const data = await res.json();
@@ -490,7 +490,11 @@ function ProductManager() {
                                     <td className="px-10 py-6">
                                         <div className="flex items-center gap-5">
                                             <div className="w-16 h-20 bg-gray-100 flex-shrink-0 relative overflow-hidden group-hover:shadow-md transition-shadow">
-                                                {p.image_url ? <img src={p.image_url} className="object-cover w-full h-full" /> : <div className="w-full h-full flex items-center justify-center text-gray-300 text-[8px]">NO IMG</div>}
+                                                <img 
+                                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/jewelry.png")} 
+                                                    className="object-cover w-full h-full" 
+                                                    alt={p.name}
+                                                />
                                             </div>
                                             <span className="text-[10px] font-mono text-gray-400">#{p.id.slice(-6).toUpperCase()}</span>
                                         </div>
@@ -515,8 +519,29 @@ function ProductManager() {
                                     <td className="px-10 py-6 text-right">
                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     setEditingId(p.id);
+                                                    
+                                                    // Fetch full images for the product when editing to avoid loading them in the list
+                                                    let fullImages = (p.images && Array.isArray(p.images) && p.images.length > 0) ? p.images : (p.image_url ? [p.image_url] : []);
+                                                    
+                                                    try {
+                                                        const res = await fetch('/api/graphql', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({
+                                                                query: `query($id: ID!) { product(id: $id) { images } }`,
+                                                                variables: { id: p.id }
+                                                            })
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.data?.product?.images) {
+                                                            fullImages = data.data.product.images;
+                                                        }
+                                                    } catch (e) {
+                                                        console.error("Failed to fetch full images:", e);
+                                                    }
+
                                                     setNewProduct({
                                                         name: p.name,
                                                         price: p.price.toString(),
@@ -524,9 +549,7 @@ function ProductManager() {
                                                         description: p.description || "",
                                                         category_id: p.category_id || "",
                                                         colors: p.colors || [],
-                                                        images: (p.images && Array.isArray(p.images) && p.images.length > 0)
-                                                            ? p.images
-                                                            : (p.image_url ? [p.image_url] : []),
+                                                        images: fullImages,
                                                         sizes: p.sizes || []
                                                     });
                                                     setIsAdding(true);
@@ -1032,7 +1055,18 @@ function CMSManager() {
                                         ) : item.type === 'JSON' && item.section === 'instagram' ? (
                                             <div className="space-y-4">
                                                 {(() => {
-                                                    const jsonVal = JSON.parse(stagedChanges[item.key]?.value || '{}');
+                                                    let jsonVal = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
+                                                    try {
+                                                        const parsed = JSON.parse(stagedChanges[item.key]?.value || '{}');
+                                                        if (parsed && typeof parsed === 'object') {
+                                                            jsonVal = { ...jsonVal, ...parsed };
+                                                        }
+                                                    } catch (e) {
+                                                        // Fallback for non-JSON values
+                                                        if (stagedChanges[item.key]?.value?.startsWith('http') || stagedChanges[item.key]?.value?.startsWith('/') || stagedChanges[item.key]?.value?.startsWith('data:')) {
+                                                            jsonVal.image_url = stagedChanges[item.key].value;
+                                                        }
+                                                    }
                                                     return (
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div className="space-y-3">

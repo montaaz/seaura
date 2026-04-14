@@ -133,6 +133,8 @@ const typeDefs = gql`
     activeCarts: [Cart!]!
     wishlist(email: String!): String
     charges: [Charge!]!
+    searchProducts(term: String!): [Product!]!
+    product(id: ID!): Product
   }
 
   type Mutation {
@@ -160,15 +162,29 @@ const typeDefs = gql`
 const resolvers = {
   Query: {
     products: async () => {
-      const res = await query("SELECT * FROM products ORDER BY created_at DESC");
-      return res.rows;
+      const res = await query(`
+        SELECT id, name, price, description, category_id, colors, sizes, created_at,
+               CASE WHEN length(image_url) > 52428800 THEN '/images/jewelry.png' ELSE image_url END as image_url,
+               CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+        FROM products 
+        ORDER BY created_at DESC
+      `);
+      // Parse images back to JSON since we casted to text for length check
+      return res.rows.map(r => ({
+        ...r,
+        images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
+      }));
     },
     categories: async () => {
       const res = await query("SELECT * FROM categories");
       return res.rows;
     },
     homeContent: async () => {
-      const res = await query("SELECT * FROM home_content");
+      const res = await query(`
+        SELECT id, key, type, section,
+               CASE WHEN length(value) > 52428800 THEN '/images/hero.png' ELSE value END as value
+        FROM home_content
+      `);
       return res.rows;
     },
     newsletter: async (_: any, __: any, context: any) => {
@@ -240,6 +256,35 @@ const resolvers = {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query("SELECT * FROM charges ORDER BY date DESC");
       return res.rows;
+    },
+    searchProducts: async (_: any, { term }: any) => {
+      const res = await query(
+        `SELECT id, name, price, 
+                CASE WHEN length(image_url) > 52428800 THEN NULL ELSE image_url END as image_url,
+                CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+         FROM products 
+         WHERE name ILIKE $1 OR description ILIKE $1 
+         ORDER BY created_at DESC LIMIT 6`,
+        [`%${term}%`]
+      );
+      return res.rows.map(r => ({
+        ...r,
+        images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
+      }));
+    },
+    product: async (_: any, { id }: any) => {
+      const res = await query(`
+        SELECT id, name, price, description, category_id, colors, sizes,
+               CASE WHEN length(image_url) > 52428800 THEN '/images/jewelry.png' ELSE image_url END as image_url,
+               CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+        FROM products WHERE id = $1
+      `, [id]);
+      const r = res.rows[0];
+      if (!r) return null;
+      return {
+        ...r,
+        images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
+      };
     }
   },
   Mutation: {
@@ -409,6 +454,8 @@ const handler = startServerAndCreateNextHandler(server, {
     return { req, session };
   }
 });
+
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   await initDb();
