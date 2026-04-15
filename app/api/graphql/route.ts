@@ -164,14 +164,15 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, created_at, image_url, images
+        SELECT id, name, price, description, category_id, colors, sizes, created_at
         FROM products 
         ORDER BY created_at DESC
         ${limitStr}
       `);
       return res.rows.map((r: any) => ({
         ...r,
-        images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
+        image_url: `/api/image/${r.id}`,
+        images: [`/api/image/${r.id}?idx=0`, `/api/image/${r.id}?idx=1`] // Return placeholders for proxy URLs
       }));
     },
     categories: async () => {
@@ -180,10 +181,14 @@ const resolvers = {
     },
     homeContent: async () => {
       const res = await query(`
-        SELECT id, key, type, section, value
+        SELECT id, key, type, section, 
+               CASE WHEN type = 'IMAGE' THEN '' ELSE value END as value
         FROM home_content
       `);
-      return res.rows;
+      return res.rows.map((r: any) => ({
+        ...r,
+        value: r.type === 'IMAGE' ? `/api/image/${r.id}?type=home` : r.value
+      }));
     },
     newsletter: async (_: any, __: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
