@@ -8,7 +8,7 @@ interface LoadingScreenProps {
     onComplete?: () => void;
 }
 
-export default function LoadingScreen({ duration = 3000, onComplete }: { duration?: number; onComplete?: () => void }) {
+export default function LoadingScreen({ duration = 3000, onComplete }: LoadingScreenProps) {
     const [isVisible, setIsVisible] = useState(true);
     const [progress, setProgress] = useState(0);
 
@@ -21,14 +21,22 @@ export default function LoadingScreen({ duration = 3000, onComplete }: { duratio
             setProgress(prev => (prev >= 100 ? 0 : prev + stepAmount));
         }, intervalTime);
 
+        const completionTimer = setTimeout(() => {
+            setIsVisible(false);
+            if (onComplete) onComplete();
+        }, duration + 500); // Small delay after bar is full
+
         return () => {
             clearInterval(progressTimer);
+            clearTimeout(completionTimer);
         };
     }, [duration, onComplete]);
 
+    if (!isVisible) return null;
+
     return (
-        <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center transition-opacity duration-1000">
-            <div className="flex flex-col items-center w-[360px]"> {/* Unified container for alignment */}
+        <div className={`fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center transition-opacity duration-1000 ${progress >= 100 ? 'opacity-0' : 'opacity-100'}`}>
+            <div className="flex flex-col items-center w-[360px]">
                 <div className="mb-12 w-full flex justify-center">
                     <Image
                         src="/logo1.png"
@@ -50,4 +58,3 @@ export default function LoadingScreen({ duration = 3000, onComplete }: { duratio
         </div>
     );
 }
-

@@ -412,7 +412,7 @@ export default function Home() {
 
   // Fetch data — show loading screen for min 3s branding, but fetch in parallel
   useEffect(() => {
-    const minTimer = new Promise<void>(resolve => setTimeout(resolve, 1000));
+    const minTimer = new Promise<void>(resolve => setTimeout(resolve, 3000));
 
     const dataFetch = fetch('/api/graphql', {
       method: 'POST',
