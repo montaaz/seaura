@@ -5,7 +5,7 @@ export async function sendEmail({ from, to, subject, content, images }: { from: 
     // Fetch SMTP settings from database
     const settingsRes = await query("SELECT key, value FROM settings WHERE key LIKE 'SMTP_%'");
     const dbSettings: Record<string, string> = {};
-    settingsRes.rows.forEach(row => {
+    settingsRes.rows.forEach((row: any) => {
         dbSettings[row.key] = row.value;
     });
 
