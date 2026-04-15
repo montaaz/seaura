@@ -7,11 +7,15 @@ const pool = new Pool({
 export const query = (text: string, params?: any[]) => pool.query(text, params);
 
 let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 export const initDb = async () => {
   if (isInitialized) return;
-  try {
-    const client = await pool.connect();
+  if (initializationPromise) return initializationPromise;
+
+  initializationPromise = (async () => {
+    try {
+      const client = await pool.connect();
     
     console.log('Checking database schema and performance indexes...');
 
@@ -92,17 +96,25 @@ export const initDb = async () => {
     `);
 
     // Performance Optimizations (CRITICAL FOR SEARCH SPEED)
-    console.log('Applying search performance optimizations...');
-    await client.query(`
-      CREATE EXTENSION IF NOT EXISTS pg_trgm;
-      CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING GIN (name gin_trgm_ops);
-      CREATE INDEX IF NOT EXISTS idx_products_description_trgm ON products USING GIN (description gin_trgm_ops);
-    `);
+    try {
+      console.log('Applying search performance optimizations...');
+      await client.query(`
+        CREATE EXTENSION IF NOT EXISTS pg_trgm;
+        CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING GIN (name gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS idx_products_description_trgm ON products USING GIN (description gin_trgm_ops);
+      `);
+    } catch (e) {
+      console.warn('pg_trgm extension or GIN index not supported in this environment, skipping fine-grained search optimization.');
+    }
 
     client.release();
     isInitialized = true;
     console.log('Database optimizations applied successfully.');
-  } catch (err) {
-    console.error('Error during database optimization:', err);
-  }
+    } catch (err) {
+      console.error('Error during database optimization:', err);
+      initializationPromise = null; // Allow retry on failure
+    }
+  })();
+
+  return initializationPromise;
 };

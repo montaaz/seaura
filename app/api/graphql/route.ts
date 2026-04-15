@@ -164,10 +164,11 @@ const resolvers = {
     products: async () => {
       const res = await query(`
         SELECT id, name, price, description, category_id, colors, sizes, created_at,
-               CASE WHEN length(image_url) > 52428800 THEN '/images/jewelry.png' ELSE image_url END as image_url,
-               CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+               CASE WHEN length(image_url) > 5242880 THEN '/images/jewelry.png' ELSE image_url END as image_url,
+               CASE WHEN length(images::text) > 5242880 THEN '[]' ELSE images::text END as images
         FROM products 
         ORDER BY created_at DESC
+        LIMIT 20
       `);
       // Parse images back to JSON since we casted to text for length check
       return res.rows.map(r => ({
@@ -182,7 +183,7 @@ const resolvers = {
     homeContent: async () => {
       const res = await query(`
         SELECT id, key, type, section,
-               CASE WHEN length(value) > 52428800 THEN '/images/hero.png' ELSE value END as value
+               CASE WHEN length(value) > 5242880 THEN '/images/hero.png' ELSE value END as value
         FROM home_content
       `);
       return res.rows;
@@ -268,8 +269,8 @@ const resolvers = {
     searchProducts: async (_: any, { term }: any) => {
       const res = await query(
         `SELECT id, name, price, 
-                CASE WHEN length(image_url) > 52428800 THEN NULL ELSE image_url END as image_url,
-                CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+                CASE WHEN length(image_url) > 5242880 THEN NULL ELSE image_url END as image_url,
+                CASE WHEN length(images::text) > 5242880 THEN '[]' ELSE images::text END as images
          FROM products 
          WHERE name ILIKE $1 OR description ILIKE $1 
          ORDER BY created_at DESC LIMIT 6`,
@@ -283,8 +284,8 @@ const resolvers = {
     product: async (_: any, { id }: any) => {
       const res = await query(`
         SELECT id, name, price, description, category_id, colors, sizes,
-               CASE WHEN length(image_url) > 52428800 THEN '/images/jewelry.png' ELSE image_url END as image_url,
-               CASE WHEN length(images::text) > 52428800 THEN '[]' ELSE images::text END as images
+               CASE WHEN length(image_url) > 5242880 THEN '/images/jewelry.png' ELSE image_url END as image_url,
+               CASE WHEN length(images::text) > 5242880 THEN '[]' ELSE images::text END as images
         FROM products WHERE id = $1
       `, [id]);
       const r = res.rows[0];
