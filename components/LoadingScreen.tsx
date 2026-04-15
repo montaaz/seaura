@@ -18,13 +18,7 @@ export default function LoadingScreen({ duration = 3000, onComplete }: { duratio
         const stepAmount = 100 / totalSteps;
         
         const progressTimer = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 100) {
-                    clearInterval(progressTimer);
-                    return 100;
-                }
-                return prev + stepAmount;
-            });
+            setProgress(prev => (prev >= 100 ? 0 : prev + stepAmount));
         }, intervalTime);
 
         return () => {
