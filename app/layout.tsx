@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "S E A U R A  | Site Officiel",
   description: "Découvrez la nouvelle collection de sacs, vêtements, bijoux et chaussures chez Parfois.",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 import { Providers } from "@/components/Providers";

@@ -139,11 +139,15 @@
 }
 
 .logo {
-  font-size: 24px;
-  font-weight: 400;
-  letter-spacing: 0.5em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.logoImg {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
 }
 
 .menuButton {
@@ -196,14 +200,18 @@
   position: absolute;
   top: 40px;
   left: 0;
-  font-size: 20px;
-  font-weight: 300;
-  letter-spacing: 0.5em;
-  color: #000;
-  text-align: center;
   width: 100%;
+  height: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   pointer-events: none;
-  text-transform: uppercase;
+}
+
+.menuBrandImg {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
 }
 
 .closeButton {
@@ -396,6 +404,56 @@
   letter-spacing: 0.1em;
 }
 
+/* Welcome Section */
+.welcomeSection {
+  background-color: #ffffff;
+  padding: 120px 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.welcomeContainer {
+  max-width: 900px;
+  padding: 0 40px;
+  text-align: left;
+}
+
+.welcomeHeading {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  color: #1c1c1c;
+  margin-bottom: 45px;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.welcomeText {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 28px;
+  line-height: 1.5;
+  color: #1c1c1c;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+
+.welcomeText em {
+  font-style: italic;
+  font-family: 'Cormorant Garamond', serif;
+}
+
+@media (max-width: 768px) {
+  .welcomeSection {
+    padding: 80px 0;
+  }
+  
+  .welcomeText {
+    font-size: 22px;
+  }
+}
+
 /* Modern Newsletter Section - Refined New Style */
 .newsletter {
   width: 100%;
@@ -573,95 +631,168 @@
 
 /* Premium Dark Footer - New Style */
 .footer {
-  padding: 120px 40px 80px;
-  background: #F6F5E0;
-  color: #000;
+  padding: 70px 80px 50px;
+  background: #F6F4E1;
+  color: #1c1c1c;
+  width: 100%;
 }
 
 .footerGrid {
-  display: flex;
-  justify-content: center;
-  gap: 100px;
-  max-width: 1200px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 0.7fr;
+  gap: 60px;
+  max-width: 1300px;
   margin: 0 auto;
-  flex-wrap: wrap;
+}
+
+@media (max-width: 1024px) {
+  .footerGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .footerGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
 }
 
 .footerCol {
-  flex: 1;
-  min-width: 200px;
-}
-
-.footerCol h3 {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 35px;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: #000;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  padding-bottom: 15px;
-}
-
-.footerCol ul {
   display: flex;
   flex-direction: column;
-  gap: 18px;
 }
 
-.footerCol ul li {
-  font-size: 13px;
-  color: #666;
-  transition: all 0.3s;
-  font-weight: 300;
+.footerHeading {
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 28px;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: #1c1c1c;
 }
 
-.footerCol ul li:hover {
-  color: #000;
-  transform: translateX(5px);
+.footerText {
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #3a3a2e;
+  margin-bottom: 22px;
+  line-height: 1.65;
+  max-width: 260px;
 }
 
-.socialRow {
-  margin: 100px auto 60px;
+.footerSubscribeGroup {
   display: flex;
-  justify-content: center;
-  max-width: 1200px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  padding-top: 60px;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
 }
 
-.socialIcons {
+.footerInputExact {
+  width: 100%;
+  max-width: 260px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  padding: 13px 16px;
+  font-size: 12px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  outline: none;
+  color: #1c1c1c;
+  letter-spacing: 0.02em;
+}
+
+.footerInputExact::placeholder {
+  color: #888;
+  font-style: italic;
+}
+
+.footerSubmitExact {
+  background: #1c1c1c;
+  color: #f5f3e8;
+  border: none;
+  padding: 13px 30px;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-transform: uppercase;
+}
+
+.footerSubmitExact:hover {
+  opacity: 0.75;
+}
+
+.footerLinks {
   display: flex;
-  gap: 35px;
+  flex-direction: column;
+  gap: 11px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.socialIcon {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
+.footerLinks li a {
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #3a3a2e;
+  transition: opacity 0.2s;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  display: block;
+}
+
+.footerLinks li a:hover {
+  opacity: 0.55;
+}
+
+.footerSocialIcons {
+  display: flex;
+  gap: 22px;
+  margin-top: 4px;
+}
+
+.socialIconLink {
+  color: #1c1c1c;
+  transition: opacity 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.4s ease;
-  cursor: pointer;
-  color: #666;
 }
 
-.socialIcon:hover {
-  border-color: #000;
-  color: #000;
-  background: rgba(0, 0, 0, 0.05);
-  transform: rotate(360deg) scale(1.1);
+.socialIconLink:hover {
+  opacity: 0.5;
 }
 
-.footerBottom {
-  text-align: center;
+.footerBottomMobile {
   margin-top: 60px;
+  padding-top: 30px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.currencySelector {
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: #666;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.footerBottomMobile p {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #888;
 }
 
 /* Featured Products Section */
@@ -926,116 +1057,104 @@
 
 /* Instagram Feed Section */
 .instagramFeed {
-  padding: 120px 40px;
+  padding: 40px 0;
   background: #F7F4E0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  width: 100%;
+}
+
+.instaTextContainer {
+  text-align: center;
+  margin-bottom: 35px;
+  padding: 0 40px;
 }
 
 .instaHeading {
-  font-size: 32px;
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 26px;
   font-weight: 400;
-  margin-bottom: 60px;
-  color: #000;
-  text-align: center;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.35em;
+  color: #1c1c1c;
+  margin-bottom: 12px;
+  text-transform: uppercase;
 }
 
-.instaSliderContainer {
+.instaSubtext {
+  font-family: 'Work Sans', sans-serif;
+  font-size: 14px;
+  color: #1c1c1c;
+  letter-spacing: 0.02em;
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.8;
+  opacity: 0.9;
+}
+
+.instaTicker {
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 60px;
-}
-
-.instaArrow {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 1.5px solid #000;
-  background: transparent;
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s, color 0.2s;
-}
-
-.instaArrow:hover {
-  background: #000;
-  color: #fff;
-}
-
-.instaFeedWrapper {
-  flex: 1;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  display: flex;
-  gap: 30px;
-  padding: 40px 0;
-  scrollbar-width: none;
-}
-
-.instaFeedWrapper::-webkit-scrollbar {
-  display: none;
-}
-
-.instaCard {
-  width: 320px;
-  height: 320px;
-  position: relative;
-  border-radius: 20px;
   overflow: hidden;
-  display: block;
-  flex-shrink: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
-  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  background: transparent;
 }
 
-.instaCard:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+.instaTickerTrack {
+  display: flex;
+  width: max-content;
+  will-change: transform;
 }
 
+.instaTickerItem {
+  flex: 0 0 320px;
+  height: 480px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Duplicated items logic via CSS is hard, so we used React duplication */
+
+@keyframes scrollMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 768px) {
+  .instaTickerItem {
+    flex: 0 0 250px;
+    height: 350px;
+  }
+}
 
 .instaImg {
-  object-fit: cover;
-  transition: transform 1.2s cubic-bezier(0.165, 0.84, 0.44, 1);
-  will-change: transform;
-  transform: translateZ(0);
+  object-fit: cover !important;
+  transition: transform 1s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
-.instaCard:hover .instaImg {
-  transform: scale(1.08);
+.instaTickerItem:hover .instaImg {
+  transform: scale(1.05);
 }
 
 .instaOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.5s ease;
-  backdrop-filter: blur(2px);
+  transition: opacity 0.3s ease;
 }
 
-.instaCard:hover .instaOverlay {
+.instaTickerItem:hover .instaOverlay {
   opacity: 1;
 }
 
 .instaIcon {
   color: #fff;
-  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.instaCard:hover .instaIcon {
-  transform: scale(1.2);
 }
 
 .joinUsBtn {
@@ -1718,5 +1837,75 @@
   .headerCenter.searchActive {
     flex: 10;
     width: 100%;
+  }
+}
+
+/* ── JOIN OUR JOURNEY ── */
+.joinJourney {
+  display: none;
+}
+
+.joinJourneyHeading {
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #3a3a2e;
+  max-width: 520px;
+  line-height: 1.8;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+/* ── INSTAGRAM GRID ── */
+.instaGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  width: 100%;
+}
+
+.instaCard {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  display: block;
+}
+
+.instaImg {
+  object-fit: cover !important;
+  transition: transform 0.6s ease;
+}
+
+.instaCard:hover .instaImg {
+  transform: scale(1.05);
+}
+
+.instaOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.instaCard:hover .instaOverlay {
+  opacity: 1;
+}
+
+.instaIcon {
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .instaGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .joinJourney {
+    padding: 40px 24px 32px;
+  }
+  .joinJourneyHeading {
+    font-size: 13px;
   }
 }

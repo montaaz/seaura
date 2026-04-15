@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import styles from "./page.module.css";
 import Image from "next/image";
 import Link from "next/link";
@@ -57,19 +57,19 @@ const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) =
           {products.slice(0, 8).map((product, idx) => (
             <Link key={product.id} href={`/shop?q=${encodeURIComponent(product.name)}`} className={styles.productCard}>
               <div className={styles.imageContainer}>
-                <Image 
-                  src={(product.images && product.images.length > 0) ? product.images[0] : (product.image_url || "/images/hero.png")} 
-                  alt={product.name} 
-                  fill 
+                <Image
+                  src={(product.images && product.images.length > 0) ? product.images[0] : (product.image_url || "/images/hero.png")}
+                  alt={product.name}
+                  fill
                   className={styles.primaryImage}
                   sizes="(max-width: 768px) 100vw, 25vw"
                   priority={idx === 0}
                 />
                 {product.images && product.images.length > 1 && (
-                  <Image 
-                    src={product.images[1]} 
-                    alt={product.name} 
-                    fill 
+                  <Image
+                    src={product.images[1]}
+                    alt={product.name}
+                    fill
                     className={styles.secondaryImage}
                     sizes="(max-width: 768px) 100vw, 25vw"
                   />
@@ -156,49 +156,201 @@ const CategoriesSection = React.memo(({ cmsContent }: any) => (
   </section>
 ));
 
-const InstagramSection = React.memo(({ cmsContent }: any) => (
-  <section className={styles.instagramFeed}>
-    <h2 className={styles.instaHeading}>Follow us on Instagram</h2>
-    <div className={styles.instaSliderContainer}>
-      <button
-        className={`${styles.instaArrow} ${styles.instaArrowLeft}`}
-        onClick={() => {
-          const el = document.getElementById('instaTrack');
-          if (el) el.scrollBy({ left: -370, behavior: 'smooth' });
-        }}
-        aria-label="Scroll left"
-      >
-        &#8592;
-      </button>
-      <div className={styles.instaFeedWrapper} id="instaTrack">
-        {Object.keys(cmsContent)
-          .filter(key => key.startsWith('instagram_post_'))
-          .sort((a, b) => parseInt(a.split('_')[2]) - parseInt(b.split('_')[2]))
-          .map(key => {
-            let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
-            try { postData = JSON.parse(cmsContent[key]); } catch (e) { }
-            return (
-              <Link key={key} href={postData.instagram_url} target="_blank" className={styles.instaCard}>
-                <Image src={postData.image_url} alt="Instagram Post" fill sizes="(max-width: 768px) 75vw, 320px" className={styles.instaImg} loading="lazy" />
-                <div className={styles.instaOverlay}><Instagram className={styles.instaIcon} size={32} /></div>
-              </Link>
-            );
-          })}
-      </div>
-      <button
-        className={`${styles.instaArrow} ${styles.instaArrowRight}`}
-        onClick={() => {
-          const el = document.getElementById('instaTrack');
-          if (el) el.scrollBy({ left: 370, behavior: 'smooth' });
-        }}
-        aria-label="Scroll right"
-      >
-        &#8594;
-      </button>
+const WelcomeSection = React.memo(() => (
+  <section className={styles.welcomeSection}>
+    <div className={styles.welcomeContainer}>
+      <h2 className={styles.welcomeHeading}>WELCOME TO S E A U R A</h2>
+      <p className={styles.welcomeText}>
+        Introducing our latest limited edition edit. Handcrafted in our studio and designed to make you feel confident, effortlessly refined and <em>entirely yourself.</em>
+      </p>
     </div>
-    <a href="https://instagram.com" target="_blank" className={styles.joinUsBtn}><Instagram size={20} /> JOIN US</a>
   </section>
 ));
+WelcomeSection.displayName = 'WelcomeSection';
+
+const InstagramSection = React.memo(({ cmsContent }: any) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const scrollDirection = useRef(-1); // -1 for RTL, 1 for LTR
+  const velocity = useRef(-0.8); // Current movement velocity
+  const requestRef = useRef<number | null>(null);
+  
+  const posts = useMemo(() => {
+    const keys = Object.keys(cmsContent)
+      .filter(key => key.startsWith('instagram_post_'))
+      .sort((a, b) => parseInt(a.split('_')[2]) - parseInt(b.split('_')[2]));
+    
+    // Triple the posts to ensure smooth looping even on large screens and during fast drags
+    return [...keys, ...keys, ...keys].map((key, index) => {
+      let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
+      try { postData = JSON.parse(cmsContent[key]); } catch (e) { }
+      return { key: `${key}-${index}`, ...postData };
+    });
+  }, [cmsContent]);
+
+  const animate = useCallback(() => {
+    if (!trackRef.current) return;
+    
+    if (!isDragging.current) {
+      const track = trackRef.current;
+      const totalWidth = track.scrollWidth;
+      if (totalWidth <= 0) {
+        requestRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      
+      scrollLeft.current += velocity.current;
+      const viewWidth = totalWidth / 3; // Because we tripled the items
+
+      if (scrollLeft.current <= -viewWidth) {
+        scrollLeft.current += viewWidth;
+      } else if (scrollLeft.current >= 0) {
+        scrollLeft.current -= viewWidth;
+      }
+      
+      track.style.transform = `translateX(${scrollLeft.current}px)`;
+    }
+    
+    requestRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [animate]);
+
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    isDragging.current = true;
+    const pageX = 'touches' in e ? e.touches[0].pageX : e.pageX;
+    startX.current = pageX - scrollLeft.current;
+    if (trackRef.current) {
+      trackRef.current.style.transition = 'none';
+      trackRef.current.style.cursor = 'grabbing';
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDragging.current || !trackRef.current) return;
+    
+    const pageX = 'touches' in e ? e.touches[0].pageX : (e as React.MouseEvent).pageX;
+    const x = pageX - startX.current;
+    
+    // Update velocity based on drag direction for a natural feel when released
+    const delta = x - scrollLeft.current;
+    if (Math.abs(delta) > 0.1) {
+       velocity.current = delta * 0.2 + (velocity.current * 0.8);
+       velocity.current = Math.max(Math.min(velocity.current, 10), -10);
+       
+       // Update base direction based on drag direction
+       if (Math.abs(velocity.current) > 0.5) {
+         scrollDirection.current = velocity.current > 0 ? 1 : -1;
+       }
+    }
+
+    scrollLeft.current = x;
+    
+    const track = trackRef.current;
+    const viewWidth = track.scrollWidth / 3;
+    
+    if (scrollLeft.current <= -viewWidth) {
+      scrollLeft.current += viewWidth;
+      startX.current += viewWidth;
+    } else if (scrollLeft.current >= 0) {
+      scrollLeft.current -= viewWidth;
+      startX.current -= viewWidth;
+    }
+    
+    track.style.transform = `translateX(${scrollLeft.current}px)`;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    if (trackRef.current) {
+      trackRef.current.style.cursor = 'grab';
+    }
+    // Gradually return to normal velocity if it's too fast, or maintain direction
+    // If user dragged left to right, velocity will be positive.
+    // If user dragged right to left, velocity will be negative.
+    // We let it glide based on user input for a bit, then maybe slow back to normal
+  };
+
+  // Slowly return to base speed after drag
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isDragging.current) {
+        // Return to 0.8 (or -0.8) based on last swipe direction
+        const targetSpeed = isHovered ? 0 : scrollDirection.current * 0.8; 
+        velocity.current += (targetSpeed - velocity.current) * 0.05;
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isHovered]);
+
+  return (
+    <section 
+      className={styles.instagramFeed}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        handleMouseUp();
+      }}
+    >
+      <div className={styles.instaTextContainer}>
+        <h2 className={styles.instaHeading}>JOIN OUR JOURNEY</h2>
+        <p className={styles.instaSubtext}>Keep up to date with everything With Lyberty - from our journey to the way each collection comes to life</p>
+      </div>
+      
+      <div 
+        className={styles.instaTicker}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
+      >
+        <div 
+          className={styles.instaTickerTrack} 
+          ref={trackRef}
+          style={{ cursor: 'grab', userSelect: 'none' }}
+        >
+          {posts.map((post) => (
+            <Link 
+              key={post.key} 
+              href={post.instagram_url} 
+              target="_blank" 
+              className={styles.instaTickerItem}
+              onClick={(e) => {
+                // Prevent navigation if user was dragging
+                if (Math.abs(velocity.current) > 2) e.preventDefault();
+              }}
+              draggable={false}
+            >
+              <Image 
+                src={post.image_url} 
+                alt="Instagram Post" 
+                fill 
+                sizes="(max-width: 768px) 300px, 400px" 
+                className={styles.instaImg} 
+                loading="lazy" 
+                draggable={false}
+              />
+              <div className={styles.instaOverlay}>
+                <Instagram className={styles.instaIcon} size={24} />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+});
+InstagramSection.displayName = 'InstagramSection';
 
 export default function Home() {
   const { data: session } = useSession();
@@ -265,12 +417,12 @@ export default function Home() {
     const dataFetch = fetch('/api/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         query: `query { 
           homeContent { key value type } 
           categories { id name } 
           products { id name price image_url images }
-        }` 
+        }`
       })
     })
       .then(res => res.json())
@@ -399,7 +551,14 @@ export default function Home() {
               </svg>
             </button>
             <div className={styles.logo}>
-              {cmsContent.brand_logo || "S E A U R A"}
+              <Image 
+                src="/logo1.png" 
+                alt="SEAURA Logo" 
+                width={150} 
+                height={40} 
+                className={styles.logoImg}
+                priority
+              />
             </div>
           </div>
 
@@ -431,7 +590,15 @@ export default function Home() {
             </svg>
           </button>
 
-          <div className={styles.menuBrand}>S E A U R A</div>
+          <div className={styles.menuBrand}>
+            <Image 
+              src="/logo1.png" 
+              alt="SEAURA Logo" 
+              width={120} 
+              height={30} 
+              className={styles.menuBrandImg}
+            />
+          </div>
 
           <nav className={styles.menuNav}>
             <ul>
@@ -458,8 +625,8 @@ export default function Home() {
       {/* Category Grid */}
       <CategoriesSection cmsContent={cmsContent} />
 
-      {/* Featured Products Section */}
-      <FeaturedProductsSection products={featuredProducts} />
+      {/* Welcome Section */}
+      <WelcomeSection />
 
       {/* Video Section */}
       <section className={styles.newsletter}>
@@ -471,8 +638,10 @@ export default function Home() {
           loop
           playsInline
         />
-
       </section>
+
+      {/* Featured Products Section (Now under Video) */}
+      <FeaturedProductsSection products={featuredProducts} />
 
       {/* Instagram Feed Section */}
       <InstagramSection cmsContent={cmsContent} />
@@ -481,52 +650,64 @@ export default function Home() {
       <footer className={styles.footer}>
         <div className={styles.footerGrid}>
           <div className={styles.footerCol}>
-            <h3>Obtenir de l&apos;aide</h3>
-            <ul>
-              <li><a href="#">Commandes</a></li>
-              <li><a href="#">Livraisons</a></li>
-              <li><a href="#">Retours</a></li>
-            </ul>
+            <h3 className={styles.footerHeading}>JOIN THE CLUB</h3>
+            <p className={styles.footerText}>Sign up for 10% off your first order and monthly subscriber-only discounts</p>
+            <div className={styles.footerSubscribeGroup}>
+              <input 
+                type="email" 
+                placeholder="Enter your email address" 
+                className={styles.footerInputExact}
+                value={inlineEmail}
+                onChange={(e) => setInlineEmail(e.target.value)}
+              />
+              <button 
+                className={styles.footerSubmitExact}
+                onClick={() => handleSubscribe(inlineEmail, false)}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "..." : "SUBSCRIBE"}
+              </button>
+            </div>
           </div>
-          <div className={styles.footerCol}>
-            <h3>Entreprise</h3>
-            <ul>
-              <li><a href="#">À propos</a></li>
-              <li><a href="#">Carrières</a></li>
-            </ul>
-          </div>
-          <div className={styles.footerCol}>
-            <h3>Politiques</h3>
-            <ul>
-              <li><a href="#">Confidentialité</a></li>
-              <li><a href="#">Cookies</a></li>
-              <li><a href="#">Mentions légales</a></li>
-            </ul>
-          </div>
-        </div>
 
-        <div className={styles.socialRow}>
-          <div className={styles.socialIcons}>
-            <div className={styles.socialIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" /></svg>
-            </div>
-            <div className={styles.socialIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>
-            </div>
-            <div className={styles.socialIcon}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
-            </div>
-            <div className={styles.socialIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.33 29 29 0 00-.46-5.33zM9.75 15.02V8.48L15.45 11.75l-5.7 3.27z" /></svg>
-            </div>
-            <div className={styles.socialIcon}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-7.1 17.1c.1-.1.3-.1.4-.2l1.2-4.5c.1-.2.1-.5.1-.7v-.1a2.8 2.8 0 014.2-2.5 2.8 2.8 0 011.6 3v.1l-1.3 5.4c0 .3.2.5.5.5a10 10 0 0010-10c0-5.5-4.5-10-10-10z" /></svg>
+          <div className={styles.footerCol}>
+            <h3 className={styles.footerHeading}>SHOP WITH LYBERTY</h3>
+            <ul className={styles.footerLinks}>
+              <li><Link href="/shop">Shop All</Link></li>
+              <li><Link href="/shop">New Arrivals</Link></li>
+              <li><Link href="/shop">Design Your Own Jewellery</Link></li>
+              <li><Link href="/shop">Charm Builder</Link></li>
+              <li><Link href="/shop">Charms</Link></li>
+              <li><Link href="/shop">Necklaces</Link></li>
+              <li><Link href="/shop">Bracelets</Link></li>
+              <li><Link href="/shop">Earrings</Link></li>
+            </ul>
+          </div>
+
+          <div className={styles.footerCol}>
+            <h3 className={styles.footerHeading}>CUSTOMER SERVICE</h3>
+            <ul className={styles.footerLinks}>
+              <li><a href="#">Search</a></li>
+              <li><a href="#">About</a></li>
+              <li><a href="#">Shipping</a></li>
+              <li><a href="#">Materials & Care</a></li>
+              <li><a href="#">Charm Style Guide</a></li>
+              <li><a href="#">Bracelet Size Guide</a></li>
+              <li><a href="#">Returns</a></li>
+              <li><a href="#">Contact</a></li>
+              <li><a href="#">Terms & Conditions</a></li>
+              <li><a href="#">Privacy Policy</a></li>
+            </ul>
+          </div>
+
+          <div className={styles.footerCol}>
+            <h3 className={styles.footerHeading}>FOLLOW US</h3>
+            <div className={styles.footerSocialIcons}>
+              <a href="https://facebook.com" target="_blank" className={styles.socialIconLink}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" /></svg></a>
+              <a href="https://instagram.com" target="_blank" className={styles.socialIconLink}><Instagram size={14} /></a>
+              <a href="https://tiktok.com" target="_blank" className={styles.socialIconLink}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.11-1.47-.17-.12-.34-.24-.5-.38-.01 2.06.01 4.13-.01 6.19-.01 2.21-.55 4.47-1.92 6.13-1.43 1.75-3.69 2.78-5.96 2.82-2.45.03-5.02-.91-6.57-2.91-1.57-1.97-1.91-4.71-1.07-7.05.74-2.13 2.53-3.87 4.67-4.63.15-.05.3-.11.45-.15.01-.01.01-.02.02-.02V8.9c-.3.08-.59.18-.88.3-2.07.82-3.7 2.72-4.14 4.93-.41 1.95.03 4.1.99 5.81.99 1.79 2.91 3.1 4.96 3.32 1.45.17 2.97-.12 4.16-.99 1.4-1.01 2.23-2.65 2.22-4.4V3.01l.01-.01c-.13-.9-.37-1.81-.79-2.63-.12-.24-.25-.49-.39-.72l.01-.01z" /></svg></a>
             </div>
           </div>
-        </div>
-
-        <div className={styles.footerBottom}>
-          <p>© 2026 SEAURA</p>
         </div>
       </footer>
 

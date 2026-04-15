@@ -10,50 +10,58 @@ interface LoadingScreenProps {
 
 export default function LoadingScreen({ duration = 3000, onComplete }: { duration?: number; onComplete?: () => void }) {
     const [isVisible, setIsVisible] = useState(true);
+    const [progress, setProgress] = useState(0);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const intervalTime = 20;
+        const totalSteps = duration / intervalTime;
+        const stepAmount = 100 / totalSteps;
+        
+        const progressTimer = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 100) {
+                    clearInterval(progressTimer);
+                    return 100;
+                }
+                return prev + stepAmount;
+            });
+        }, intervalTime);
+
+        const completionTimer = setTimeout(() => {
             setIsVisible(false);
             if (onComplete) onComplete();
-        }, duration);
+        }, duration + 500); // Small delay after bar is full
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearInterval(progressTimer);
+            clearTimeout(completionTimer);
+        };
     }, [duration, onComplete]);
 
     if (!isVisible) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-[#F8F3E8] flex flex-col items-center justify-center transition-opacity duration-1000">
-            <div className="relative mb-8 group">
-                {/* Rotating Circle */}
-                <div className="w-64 h-64 border-[0.5px] border-black/10 rounded-full absolute -inset-4 animate-[spin_10s_linear_infinite]" />
-                <div className="w-64 h-64 border-t-[1.5px] border-black/80 rounded-full absolute -inset-4 animate-[spin_3s_cubic-bezier(0.4,0,0.2,1)_infinite]" />
-                
-                {/* Logo Container */}
-                <div className="w-56 h-56 rounded-full border-[0.5px] border-black/5 flex items-center justify-center bg-[#F8F3E8] relative z-10">
-                    <h1 className="text-4xl md:text-5xl font-light tracking-[0.6em] text-black/90 ml-[0.6em] uppercase" style={{ fontFamily: 'var(--font-kalnia), serif' }}>
-                        Seaura
-                    </h1>
+        <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center transition-opacity duration-1000">
+            <div className="flex flex-col items-center w-[360px]"> {/* Unified container for alignment */}
+                <div className="mb-12 w-full flex justify-center">
+                    <Image
+                        src="/logo1.png"
+                        alt="SEAURA Logo"
+                        width={360}
+                        height={90}
+                        className="object-contain"
+                        priority
+                    />
+                </div>
+
+                <div className="w-[230px] h-[3px] bg-black/5 relative overflow-hidden mx-auto">
+                    <div 
+                        className="absolute h-full left-0 top-0 bg-black transition-all duration-100 ease-linear" 
+                        style={{ width: `${progress}%` }}
+                    />
                 </div>
             </div>
-
-            {/* Loading Text */}
-            <div className="flex flex-col items-center gap-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.8em] text-black/40 animate-pulse">
-                    Chargement...
-                </span>
-                <div className="w-48 h-[1px] bg-black/5 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-black/40 animate-[loadingLine_3s_ease-in-out_infinite]" />
-                </div>
-            </div>
-
-            <style jsx>{`
-                @keyframes loadingLine {
-                    0% { transform: translateX(-100%); }
-                    50% { transform: translateX(0); }
-                    100% { transform: translateX(100%); }
-                }
-            `}</style>
         </div>
     );
 }
+
