@@ -419,9 +419,9 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: `query { 
-          homeContent { key value type } 
+          homeContent { key value } 
           categories { id name } 
-          products { id name price image_url images }
+          products(limit: 4) { id name price image_url }
         }`
       })
     })

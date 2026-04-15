@@ -121,7 +121,7 @@ const typeDefs = gql`
   }
 
   type Query {
-    products: [Product!]!
+    products(limit: Int): [Product!]!
     categories: [Category!]!
     homeContent: [HomeContent!]!
     newsletter: [NewsletterEntry!]!
@@ -161,14 +161,17 @@ const typeDefs = gql`
 
 const resolvers = {
   Query: {
-    products: async () => {
+    products: async (_: any, { limit }: { limit?: number }) => {
+      console.time('graphql_products_query');
+      const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
         SELECT id, name, price, description, category_id, colors, sizes, created_at, image_url, images
         FROM products 
         ORDER BY created_at DESC
+        ${limitStr}
       `);
-      // Parse images back to JSON since we casted to text for length check
-      return res.rows.map(r => ({
+      console.timeEnd('graphql_products_query');
+      return res.rows.map((r: any) => ({
         ...r,
         images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
       }));
@@ -178,10 +181,12 @@ const resolvers = {
       return res.rows;
     },
     homeContent: async () => {
+      console.time('graphql_homecontent_query');
       const res = await query(`
         SELECT id, key, type, section, value
         FROM home_content
       `);
+      console.timeEnd('graphql_homecontent_query');
       return res.rows;
     },
     newsletter: async (_: any, __: any, context: any) => {
@@ -239,7 +244,7 @@ const resolvers = {
       try {
         const res = await query("SELECT id, session_id, items, updated_at::text FROM carts ORDER BY updated_at DESC LIMIT 50");
         // Diagnostic : on s'assure que chaque champ est bien là, quitte à forcer les noms
-        return res.rows.map(row => {
+        return res.rows.map((row: any) => {
           const itemsData = row.items || [];
           return {
             id: String(row.id),
@@ -270,7 +275,7 @@ const resolvers = {
          ORDER BY created_at DESC LIMIT 6`,
         [`%${term}%`]
       );
-      return res.rows.map(r => ({
+      return res.rows.map((r: any) => ({
         ...r,
         images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
       }));
@@ -457,6 +462,15 @@ const handler = startServerAndCreateNextHandler(server, {
 });
 
 export const maxDuration = 60;
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+    responseLimit: false,
+  },
+};
 
 export async function GET(request: Request) {
   await initDb();

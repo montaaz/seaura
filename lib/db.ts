@@ -2,11 +2,38 @@ import { Pool } from 'pg';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 });
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
-
 let isInitialized = false;
+const cache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 300000; // 5 minutes
+
+export const query = async (text: string, params?: any[]) => {
+  const cacheKey = `${text}_${JSON.stringify(params || [])}`;
+  const now = Date.now();
+  
+  if (cache.has(cacheKey)) {
+    const cached = cache.get(cacheKey)!;
+    if (now - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
+  const result = await pool.query(text, params);
+  
+  // Only cache SELECT queries
+  if (text.trim().toUpperCase().startsWith('SELECT')) {
+    cache.set(cacheKey, { data: result, timestamp: now });
+  } else {
+    // Clear cache on mutations (INSERT/UPDATE/DELETE)
+    cache.clear();
+  }
+  
+  return result;
+};
 
 export const initDb = async () => {
   if (isInitialized) return;

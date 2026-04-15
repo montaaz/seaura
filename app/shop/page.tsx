@@ -56,7 +56,7 @@ function Shop() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products { id name price image_url images description category_id colors { name hex } sizes } categories { id name } homeContent { key value } }'
+                        query: '{ products(limit: 20) { id name price image_url images category_id colors { name hex } sizes } categories { id name } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
