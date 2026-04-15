@@ -213,26 +213,34 @@ const resolvers = {
       return res.rows;
     },
     orders: async (_: any, __: any, context: any) => {
-      // Pour le moment on autorise pour que l'admin puisse voir les commandes
-      const res = await query("SELECT id, user_id, total, status, payment_status, created_at::text, customer_email, customer_phone FROM orders ORDER BY created_at DESC");
-      const orders = res.rows;
-      
-      for (let order of orders) {
-        try {
-          const itemsRes = await query(
-            "SELECT oi.id, oi.product_id, oi.quantity, oi.price, oi.size, oi.color, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $1",
-            [order.id]
-          );
-          order.items = itemsRes.rows;
-        } catch (e) {
-          order.items = [];
-        }
-      }
-      return orders;
+      // Optimise: Use a single query with JOIN to avoid N+1 issue
+      const res = await query(`
+        SELECT o.id, o.user_id, o.total, o.status, o.payment_status, o.created_at::text, o.customer_email, o.customer_phone,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'id', oi.id,
+                     'product_id', oi.product_id,
+                     'quantity', oi.quantity,
+                     'price', oi.price,
+                     'size', oi.size,
+                     'color', oi.color,
+                     'product_name', p.name
+                   )
+                 ) FILTER (WHERE oi.id IS NOT NULL),
+                 '[]'
+               ) as items
+        FROM orders o
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.id
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+      `);
+      return res.rows;
     },
     activeCarts: async (_: any, __: any, context: any) => {
       try {
-        const res = await query("SELECT id, session_id, items, updated_at::text FROM carts ORDER BY updated_at DESC");
+        const res = await query("SELECT id, session_id, items, updated_at::text FROM carts ORDER BY updated_at DESC LIMIT 50");
         // Diagnostic : on s'assure que chaque champ est bien là, quitte à forcer les noms
         return res.rows.map(row => {
           const itemsData = row.items || [];
