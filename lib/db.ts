@@ -15,7 +15,7 @@ export const initDb = async () => {
     
     console.log('Checking database schema and performance indexes...');
 
-    // Create User Table
+    // Create All Tables in one batch to minimize round-trips
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -24,18 +24,12 @@ export const initDb = async () => {
         role VARCHAR(50) DEFAULT 'CLIENT',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Create Category Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS categories (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL
       );
-    `);
 
-    // Create Product Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -48,10 +42,7 @@ export const initDb = async () => {
         category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Migrations / Schema Updates
-    await client.query(`
       DO $$ 
       BEGIN 
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sizes') THEN
@@ -64,10 +55,7 @@ export const initDb = async () => {
           ALTER TABLE products ADD COLUMN colors JSONB DEFAULT '[]';
         END IF;
       END $$;
-    `);
 
-    // Create Home Content Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS home_content (
         id SERIAL PRIMARY KEY,
         key VARCHAR(100) UNIQUE NOT NULL,
@@ -76,10 +64,7 @@ export const initDb = async () => {
         section VARCHAR(100),
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Create Orders Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -89,16 +74,14 @@ export const initDb = async () => {
         payment_status VARCHAR(50) DEFAULT 'UNPAID',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Create Chat Tables
-    await client.query(`
       CREATE TABLE IF NOT EXISTS chat_sessions (
         id SERIAL PRIMARY KEY,
         user_email VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_email)
       );
+
       CREATE TABLE IF NOT EXISTS chat_messages (
         id SERIAL PRIMARY KEY,
         session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE,

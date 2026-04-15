@@ -330,7 +330,7 @@ function Shop() {
     };
 
     if (loading) {
-        return <LoadingScreen duration={3000} onComplete={() => setLoading(false)} />;
+        return <LoadingScreen duration={1000} onComplete={() => setLoading(false)} />;
     }
 
     return (

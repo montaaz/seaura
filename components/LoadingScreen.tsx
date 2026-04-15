@@ -27,18 +27,10 @@ export default function LoadingScreen({ duration = 3000, onComplete }: { duratio
             });
         }, intervalTime);
 
-        const completionTimer = setTimeout(() => {
-            setIsVisible(false);
-            if (onComplete) onComplete();
-        }, duration + 500); // Small delay after bar is full
-
         return () => {
             clearInterval(progressTimer);
-            clearTimeout(completionTimer);
         };
     }, [duration, onComplete]);
-
-    if (!isVisible) return null;
 
     return (
         <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center transition-opacity duration-1000">
