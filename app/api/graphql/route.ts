@@ -162,7 +162,6 @@ const typeDefs = gql`
 const resolvers = {
   Query: {
     products: async (_: any, { limit }: { limit?: number }) => {
-      console.time('graphql_products_query');
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
         SELECT id, name, price, description, category_id, colors, sizes, created_at, image_url, images
@@ -170,7 +169,6 @@ const resolvers = {
         ORDER BY created_at DESC
         ${limitStr}
       `);
-      console.timeEnd('graphql_products_query');
       return res.rows.map((r: any) => ({
         ...r,
         images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
@@ -181,12 +179,10 @@ const resolvers = {
       return res.rows;
     },
     homeContent: async () => {
-      console.time('graphql_homecontent_query');
       const res = await query(`
         SELECT id, key, type, section, value
         FROM home_content
       `);
-      console.timeEnd('graphql_homecontent_query');
       return res.rows;
     },
     newsletter: async (_: any, __: any, context: any) => {
@@ -462,15 +458,6 @@ const handler = startServerAndCreateNextHandler(server, {
 });
 
 export const maxDuration = 60;
-
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-    responseLimit: false,
-  },
-};
 
 export async function GET(request: Request) {
   await initDb();
