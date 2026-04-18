@@ -14,6 +14,10 @@ export async function GET(
         let res;
         if (type === 'product') {
             res = await query("SELECT image_url, images FROM products WHERE id = $1", [id]);
+        } else if (type === 'category') {
+            res = await query("SELECT image_url FROM categories WHERE id = $1", [id]);
+        } else if (type === 'subcategory') {
+            res = await query("SELECT image_url FROM sub_categories WHERE id = $1", [id]);
         } else {
             res = await query("SELECT value FROM home_content WHERE id = $1", [id]);
         }
@@ -21,7 +25,7 @@ export async function GET(
         const data = res.rows[0];
         if (!data) return new Response("Not Found", { status: 404 });
 
-        let rawValue = type === 'product' ? data.image_url : data.value;
+        let rawValue = type === 'product' ? data.image_url : (type === 'category' ? data.image_url : (type === 'subcategory' ? data.image_url : data.value));
 
         // If an index is provided, pull from the images array instead
         if (type === 'product' && idx !== null) {

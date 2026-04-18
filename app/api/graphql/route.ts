@@ -16,6 +16,15 @@ const typeDefs = gql`
   type Category {
     id: ID!
     name: String!
+    image_url: String
+    sub_categories: [SubCategory!]
+  }
+
+  type SubCategory {
+    id: ID!
+    name: String!
+    category_id: ID!
+    image_url: String
   }
 
   type Color {
@@ -38,6 +47,7 @@ const typeDefs = gql`
     colors: [Color!]
     images: [String!]
     sizes: [String!]
+    stock: Int
     created_at: String
   }
 
@@ -135,18 +145,20 @@ const typeDefs = gql`
     charges: [Charge!]!
     searchProducts(term: String!): [Product!]!
     product(id: ID!): Product
+    subCategories(categoryId: ID): [SubCategory!]!
   }
 
   type Mutation {
-    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!]): Product!
-    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!]): Product!
+    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], stock: Int): Product!
+    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], stock: Int): Product!
     deleteProduct(id: ID!): Boolean!
     updateHomeContent(key: String!, value: String!, type: String!, section: String): HomeContent!
     subscribeNewsletter(email: String!): Boolean!
     createOrder(total: Float!, items: [OrderItemInput!]!, email: String, phone: String): Order!
     updateOrderStatus(id: ID!, status: String!): Order!
     updateCart(sessionId: String!, items: String!): Boolean!
-    createCategory(name: String!): Category!
+    createCategory(name: String!, image_url: String): Category!
+    updateCategory(id: ID!, name: String, image_url: String): Category!
     deleteCategory(id: ID!): Boolean!
     sendChatMessage(email: String!, content: String!, role: String!): ChatMessage!
     deleteChatSession(email: String!): Boolean!
@@ -156,6 +168,9 @@ const typeDefs = gql`
     createCharge(description: String!, amount: Float!, category: String, date: String): Charge!
     deleteCharge(id: ID!): Boolean!
     updateOrderPaymentStatus(id: ID!, payment_status: String!): Order!
+    createSubCategory(name: String!, category_id: ID!, image_url: String): SubCategory!
+    updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
+    deleteSubCategory(id: ID!): Boolean!
   }
 `;
 
@@ -164,7 +179,7 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, created_at
+        SELECT id, name, price, description, category_id, colors, sizes, stock, created_at
         FROM products 
         ORDER BY created_at DESC
         ${limitStr}
@@ -176,8 +191,28 @@ const resolvers = {
       }));
     },
     categories: async () => {
-      const res = await query("SELECT * FROM categories");
-      return res.rows;
+      const res = await query("SELECT id, name FROM categories ORDER BY name ASC");
+      const subRes = await query("SELECT id, name, category_id FROM sub_categories ORDER BY name ASC");
+      
+      return res.rows.map((r: any) => ({
+        ...r,
+        image_url: `/api/image/${r.id}?type=category`,
+        sub_categories: subRes.rows
+          .filter((s: any) => s.category_id === r.id)
+          .map((s: any) => ({
+            ...s,
+            image_url: `/api/image/${s.id}?type=subcategory`
+          }))
+      }));
+    },
+    subCategories: async (_: any, { categoryId }: { categoryId?: string }) => {
+      const where = categoryId ? `WHERE category_id = $1` : '';
+      const params = categoryId ? [categoryId] : [];
+      const res = await query(`SELECT id, name, category_id FROM sub_categories ${where} ORDER BY name ASC`, params);
+      return res.rows.map((r: any) => ({
+        ...r,
+        image_url: `/api/image/${r.id}?type=subcategory`
+      }));
     },
     homeContent: async () => {
       const res = await query(`
@@ -283,7 +318,7 @@ const resolvers = {
     },
     product: async (_: any, { id }: any) => {
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, image_url, images
+        SELECT id, name, price, description, category_id, colors, sizes, image_url, images, stock
         FROM products WHERE id = $1
       `, [id]);
       const r = res.rows[0];
@@ -295,19 +330,19 @@ const resolvers = {
     }
   },
   Mutation: {
-    createProduct: async (_: any, { name, description, price, image_url, category_id, colors, images, sizes }: any, context: any) => {
+    createProduct: async (_: any, { name, description, price, image_url, category_id, colors, images, sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO products (name, description, price, image_url, category_id, colors, images, sizes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || [])]
+        "INSERT INTO products (name, description, price, image_url, category_id, colors, images, sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
+        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), stock || 10]
       );
       return res.rows[0];
     },
-    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, colors, images, sizes }: any, context: any) => {
+    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, colors, images, sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, colors = $6, images = $7, sizes = $8 WHERE id = $9 RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), id]
+        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, colors = $6, images = $7, sizes = $8, stock = $9 WHERE id = $10 RETURNING *",
+        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), stock, id]
       );
       return res.rows[0];
     },
@@ -389,13 +424,27 @@ const resolvers = {
       );
       return true;
     },
-    createCategory: async (_: any, { name }: any, context: any) => {
+    createCategory: async (_: any, { name, image_url }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING *",
-        [name]
+        "INSERT INTO categories (name, image_url) VALUES ($1, $2) RETURNING id, name",
+        [name, image_url]
       );
-      return res.rows[0];
+      return { 
+        ...res.rows[0], 
+        image_url: `/api/image/${res.rows[0].id}?type=category`
+      };
+    },
+    updateCategory: async (_: any, { id, name, image_url }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(
+        "UPDATE categories SET name = COALESCE($1, name), image_url = COALESCE($2, image_url) WHERE id = $3 RETURNING id, name",
+        [name, image_url, id]
+      );
+      return { 
+        ...res.rows[0], 
+        image_url: `/api/image/${res.rows[0].id}?type=category`
+      };
     },
     deleteCategory: async (_: any, { id }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
@@ -445,6 +494,33 @@ const resolvers = {
         "INSERT INTO wishlists (user_email, items, updated_at) VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP) ON CONFLICT (user_email) DO UPDATE SET items = EXCLUDED.items, updated_at = CURRENT_TIMESTAMP",
         [email, items]
       );
+      return true;
+    },
+    createSubCategory: async (_: any, { name, category_id, image_url }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(
+        "INSERT INTO sub_categories (name, category_id, image_url) VALUES ($1, $2, $3) RETURNING id, name, category_id",
+        [name, category_id, image_url]
+      );
+      return { 
+        ...res.rows[0], 
+        image_url: `/api/image/${res.rows[0].id}?type=subcategory`
+      };
+    },
+    updateSubCategory: async (_: any, { id, name, image_url }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(
+        "UPDATE sub_categories SET name = COALESCE($1, name), image_url = COALESCE($2, image_url) WHERE id = $3 RETURNING id, name, category_id",
+        [name, image_url, id]
+      );
+      return { 
+        ...res.rows[0], 
+        image_url: `/api/image/${res.rows[0].id}?type=subcategory`
+      };
+    },
+    deleteSubCategory: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM sub_categories WHERE id = $1", [id]);
       return true;
     }
   }

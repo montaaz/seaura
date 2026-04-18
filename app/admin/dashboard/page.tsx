@@ -342,7 +342,7 @@ function ProductManager() {
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [newProduct, setNewProduct] = useState({ name: "", price: "", image_url: "", description: "", category_id: "", colors: [] as { name: string, hex: string }[], images: [] as string[], sizes: [] as string[] });
+    const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [] as { name: string, hex: string }[], images: [] as string[], sizes: [] as string[] });
     const [customColor, setCustomColor] = useState({ name: "", hex: "#000000" });
     const [customSize, setCustomSize] = useState("");
 
@@ -352,7 +352,7 @@ function ProductManager() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: '{ products { id name price image_url images description category_id colors { name hex } sizes } categories { id name } }'
+                query: '{ products { id name price image_url images description category_id colors { name hex } sizes stock } categories { id name } }'
             })
         });
         const data = await res.json();
@@ -409,11 +409,11 @@ function ProductManager() {
             }
 
             const mutation = isEditing 
-                ? `mutation($id: ID!, $name: String!, $price: Float!, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
-                    updateProduct(id: $id, name: $name, price: $price, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
+                ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
+                    updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
                 }`
-                : `mutation($name: String!, $price: Float!, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
-                    createProduct(name: $name, price: $price, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
+                : `mutation($name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
+                    createProduct(name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
                 }`;
 
             const res = await fetch('/api/graphql', {
@@ -425,6 +425,7 @@ function ProductManager() {
                         id: editingId,
                         name: newProduct.name,
                         price: parseFloat(newProduct.price),
+                        stock: parseInt(newProduct.stock) || 0,
                         image_url: newProduct.image_url,
                         description: newProduct.description,
                         category_id: newProduct.category_id || null,
@@ -440,7 +441,7 @@ function ProductManager() {
             } else {
                 setIsAdding(false);
                 setEditingId(null);
-                setNewProduct({ name: "", price: "", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
                 fetchData();
             }
         } catch (err) {
@@ -461,7 +462,7 @@ function ProductManager() {
                     <button
                         onClick={() => {
                             setEditingId(null);
-                            setNewProduct({ name: "", price: "", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
                             setIsAdding(true);
                         }}
                         className="bg-black text-white px-8 py-3 rounded-full text-sm font-medium hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2"
@@ -476,8 +477,9 @@ function ProductManager() {
                             <tr className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] border-b border-gray-50">
                                 <th className="px-10 py-6">Reference</th>
                                 <th className="px-6 py-6">Designation</th>
-                                <th className="px-6 py-6">Category</th>
-                                <th className="px-6 py-6">Price</th>
+                                <th className="px-6 py-6 font-bold">Category</th>
+                                <th className="px-6 py-6 font-bold">Stock</th>
+                                <th className="px-6 py-6 font-bold">Price</th>
                                 <th className="px-6 py-6">Colors</th>
                                 <th className="px-10 py-6 text-right">Options</th>
                             </tr>
@@ -502,6 +504,11 @@ function ProductManager() {
                                     <td className="px-6 py-6 font-medium text-sm tracking-tight">{p.name}</td>
                                     <td className="px-6 py-6 text-xs text-gray-400 uppercase tracking-widest font-bold">
                                         {categories.find(c => c.id === p.category_id)?.name || "—"}
+                                    </td>
+                                    <td className="px-6 py-6">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${p.stock <= 0 ? 'bg-red-50 text-red-500' : p.stock < 5 ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-500'}`}>
+                                            {p.stock <= 0 ? 'RUPTURE' : `${p.stock} unités`}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-6 text-sm text-gray-500">€{p.price}</td>
                                     <td className="px-6 py-6">
@@ -545,6 +552,7 @@ function ProductManager() {
                                                     setNewProduct({
                                                         name: p.name,
                                                         price: p.price.toString(),
+                                                        stock: (p.stock || 0).toString(),
                                                         image_url: p.image_url || "",
                                                         description: p.description || "",
                                                         category_id: p.category_id || "",
@@ -596,7 +604,7 @@ function ProductManager() {
                     onClick={() => {
                         setIsAdding(false);
                         setEditingId(null);
-                        setNewProduct({ name: "", price: "", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                        setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
                     }}
                 >
                     <div
@@ -610,7 +618,7 @@ function ProductManager() {
                         <div className="p-6 md:p-12">
                             <h3 className="text-2xl md:text-3xl font-light mb-6 md:mb-8">{editingId ? "Modifier le Produit" : "Nouveau Produit"}</h3>
                             <form onSubmit={handleAddProduct} className="space-y-4 md:space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Désignation</label>
                                         <input
@@ -618,6 +626,15 @@ function ProductManager() {
                                             className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
                                             value={newProduct.name}
                                             onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Stock (Qté)</label>
+                                        <input
+                                            required type="number"
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
+                                            value={newProduct.stock}
+                                            onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -829,7 +846,7 @@ function ProductManager() {
                                         onClick={() => {
                                             setIsAdding(false);
                                             setEditingId(null);
-                                            setNewProduct({ name: "", price: "", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
                                         }}
                                         className="flex-1 h-14 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-all active:scale-95 text-gray-400"
                                     >
@@ -1480,6 +1497,7 @@ function CategoryManager() {
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [newCatName, setNewCatName] = useState("");
+    const [newCatImage, setNewCatImage] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
     const fetchCategories = () => {
@@ -1487,7 +1505,7 @@ function CategoryManager() {
         fetch('/api/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: '{ categories { id name } }' })
+            body: JSON.stringify({ query: '{ categories { id name image_url sub_categories { id name image_url } } }' })
         })
             .then(res => res.json())
             .then(data => {
@@ -1507,17 +1525,67 @@ function CategoryManager() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: `mutation($name: String!) { createCategory(name: $name) { id name } }`,
-                    variables: { name: newCatName }
+                    query: `mutation($name: String!, $image_url: String) { createCategory(name: $name, image_url: $image_url) { id name } }`,
+                    variables: { name: newCatName, image_url: newCatImage }
                 })
             });
             setNewCatName("");
+            setNewCatImage("");
             fetchCategories();
         } catch (error) {
             console.error(error);
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleUpdateImage = async (id: string, file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64 = reader.result as string;
+            try {
+                await fetch('/api/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: `mutation($id: ID!, $image_url: String) { updateCategory(id: $id, image_url: $image_url) { id } }`,
+                        variables: { id, image_url: base64 }
+                    })
+                });
+                fetchCategories();
+            } catch (error) {}
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleAddSub = async (catId: string, name: string) => {
+        if (!name.trim()) return;
+        try {
+            await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($name: String!, $category_id: ID!) { createSubCategory(name: $name, category_id: $category_id) { id } }`,
+                    variables: { name, category_id: catId }
+                })
+            });
+            fetchCategories();
+        } catch (error) {}
+    };
+
+    const handleDeleteSub = async (id: string) => {
+        if (!confirm("Supprimer cette sous-catégorie ?")) return;
+        try {
+            await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($id: ID!) { deleteSubCategory(id: $id) }`,
+                    variables: { id }
+                })
+            });
+            fetchCategories();
+        } catch (error) {}
     };
 
     const handleDelete = async (id: string) => {
@@ -1555,6 +1623,35 @@ function CategoryManager() {
                                 placeholder="ex: Accessoires Edition"
                             />
                         </div>
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">Image de couverture</label>
+                            <label className="block w-full h-32 bg-gray-50 border-2 border-dashed border-gray-100 rounded-[1.5rem] relative overflow-hidden cursor-pointer hover:border-black/20 transition-all">
+                                {newCatImage ? (
+                                    <img src={newCatImage} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-300">
+                                        <ImageIcon size={24} />
+                                        <span className="text-[8px] font-black uppercase tracking-widest">Upload Image</span>
+                                    </div>
+                                )}
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => setNewCatImage(reader.result as string);
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                />
+                            </label>
+                            {newCatImage && (
+                                <button type="button" onClick={() => setNewCatImage("")} className="text-[9px] text-red-400 font-bold uppercase tracking-widest ml-2">Supprimer l'image</button>
+                            )}
+                        </div>
                         <button
                             type="submit"
                             disabled={isSaving}
@@ -1578,19 +1675,69 @@ function CategoryManager() {
 
                     <div className="divide-y divide-gray-50">
                         {categories.map((cat) => (
-                            <div key={cat.id} className="flex justify-between items-center p-8 hover:bg-gray-50/50 transition-colors group">
-                                <div className="flex items-center gap-6">
-                                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-black/20 group-hover:text-black transition-colors">
-                                        <Tags size={20} />
+                            <div key={cat.id} className="flex flex-col p-8 hover:bg-gray-50/50 transition-colors group border-b border-gray-50 last:border-0">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-6">
+                                        <label className="w-16 h-20 bg-gray-50 rounded-2xl flex items-center justify-center text-black/20 group-hover:text-black transition-all relative overflow-hidden cursor-pointer border border-transparent hover:border-gray-200">
+                                            {cat.image_url ? (
+                                                <img src={cat.image_url} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <Tags size={20} />
+                                            )}
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                <RefreshCcw size={14} className="text-white" />
+                                            </div>
+                                            <input 
+                                                type="file" 
+                                                className="hidden" 
+                                                accept="image/*"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleUpdateImage(cat.id, file);
+                                                }}
+                                            />
+                                        </label>
+                                        <div>
+                                            <span className="text-xl font-medium text-gray-800 block">{cat.name}</span>
+                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">ID: #{cat.id}</p>
+                                        </div>
                                     </div>
-                                    <span className="text-lg font-medium text-gray-700">{cat.name}</span>
+                                    <button
+                                        onClick={() => handleDelete(cat.id)}
+                                        className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => handleDelete(cat.id)}
-                                    className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
+
+                                {/* Subcategories */}
+                                <div className="ml-20 space-y-4">
+                                    <div className="flex flex-wrap gap-3">
+                                        {(cat.sub_categories || []).map((sub: any) => (
+                                            <div key={sub.id} className="bg-gray-50 rounded-full px-5 py-2 flex items-center gap-3 border border-gray-100 group/sub">
+                                                <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">{sub.name}</span>
+                                                <button onClick={() => handleDeleteSub(sub.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover/sub:opacity-100 transition-opacity">
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div className="relative max-w-xs">
+                                        <input 
+                                            type="text"
+                                            placeholder="+ Ajouter sous-catégorie"
+                                            className="w-full bg-white border border-gray-100 rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest focus:border-black outline-none transition-all pr-12"
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  handleAddSub(cat.id, (e.target as HTMLInputElement).value);
+                                                  (e.target as HTMLInputElement).value = "";
+                                                }
+                                            }}
+                                        />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-300 font-bold">ENTER</div>
+                                    </div>
+                                </div>
                             </div>
                         ))}
                     </div>

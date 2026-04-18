@@ -57,6 +57,14 @@ export const initDb = async () => {
         name VARCHAR(255) UNIQUE NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS sub_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+        image_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -72,7 +80,7 @@ export const initDb = async () => {
 
       DO $$ 
       BEGIN 
-        -- Migrate image_url to TEXT if it is VARCHAR
+        -- Schema Migrations
         IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='image_url' AND data_type='character varying') THEN
           ALTER TABLE products ALTER COLUMN image_url TYPE TEXT;
         END IF;
@@ -80,11 +88,25 @@ export const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sizes') THEN
           ALTER TABLE products ADD COLUMN sizes JSONB DEFAULT '[]';
         END IF;
+
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='images') THEN
           ALTER TABLE products ADD COLUMN images JSONB DEFAULT '[]';
         END IF;
+
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='colors') THEN
           ALTER TABLE products ADD COLUMN colors JSONB DEFAULT '[]';
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='stock') THEN
+          ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 10;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='categories' AND column_name='image_url') THEN
+          ALTER TABLE categories ADD COLUMN image_url TEXT;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sub_category_id') THEN
+          ALTER TABLE products ADD COLUMN sub_category_id INTEGER REFERENCES sub_categories(id) ON DELETE SET NULL;
         END IF;
       END $$;
 
@@ -113,7 +135,6 @@ export const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_email)
       );
-
       CREATE TABLE IF NOT EXISTS chat_messages (
         id SERIAL PRIMARY KEY,
         session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE,
@@ -121,6 +142,7 @@ export const initDb = async () => {
         content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
     `);
 
     // Performance Optimizations (Handled separately to prevent failure on permission issues)

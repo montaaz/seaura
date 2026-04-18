@@ -1,205 +1,324 @@
 .shopContainer {
     min-height: 100vh;
-    background: #F8F3E8;
+    background: #ffffff;
     color: #000;
-    font-family: 'Raleway', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     padding-bottom: 0;
     overflow-x: hidden;
     width: 100%;
+    padding-top: 100px;
 }
 
-.stickyHeader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-    background: transparent;
+/* Header Styles */
+.header {
+  height: 80px;
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  background: #F7F4E0;
+  color: #000;
+  z-index: 1000;
+  transition: background 0.3s ease, color 0.3s ease, height 0.3s ease, backdrop-filter 0.3s ease;
+  will-change: background, color, height;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* Announcement Bar */
-.announcementBar {
-    background: #F8F3E8;
-    color: #000;
-    padding: 10px 20px;
-    text-align: center;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+.headerScrolled {
+  background: #F7F4E0 !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #000 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  height: 70px;
 }
 
-/* Cinematic Header Over Hero */
-.nav {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 25px 80px;
-    background: transparent;
-    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+.headerLayout {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 10;
 }
 
-.navScrolled {
-    background: #F8F3E8;
-    padding: 18px 80px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  transition: opacity 0.3s ease;
 }
 
-.navLogo {
-    font-family: 'Kalnia', serif;
-    font-size: 48px;
-    color: #000;
-    letter-spacing: -0.02em;
-    text-decoration: none;
-    transition: color 0.4s;
-    font-weight: 400;
-}
-
-.navScrolled .navLogo {
-    color: #000;
-}
-
-.navIcons {
-    display: flex;
-    gap: 40px;
-    color: #000;
-    transition: color 0.4s;
-}
-
-.navScrolled .navIcons {
-    color: #000;
-}
-
-.navIcon {
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.navIcon:hover {
-    opacity: 0.6;
-    transform: scale(1.1);
-}
-
-.noScroll {
-    overflow: hidden;
-    height: 100vh;
-}
-
-/* Header / Search Bar Styles */
 .headerCenter {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.searchWrapper {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    width: 100%;
-    max-width: 300px;
-    transition: all 0.4s ease;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .headerCenter.searchActive {
-    flex: 2;
+  flex: 2;
 }
 
-.mobileSearch {
-    display: none;
+.headerRight {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  transition: opacity 0.3s ease;
 }
 
-.searchPill {
-    display: flex;
-    align-items: center;
-    background: transparent;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    padding: 6px 0;
-    width: 100%;
-    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-    cursor: text;
-    color: inherit;
+.hideElement {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.navScrolled .searchPill {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+.logo {
+  height: 40px;
+  display: flex;
+  align-items: center;
 }
 
-.searchActive .searchPill {
-    background: #f4f4f4;
-    border: none !important;
-    border-radius: 25px;
-    color: #000 !important;
-    height: 48px;
-    padding: 0 20px;
+.logoImg {
+  height: 60%;
+  width: auto;
+  object-fit: contain;
 }
 
-.searchInput {
-    width: 100%;
-    border: none;
-    background: transparent;
-    outline: none;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    color: inherit;
-    margin-left: 10px;
+.menuButton {
+  color: inherit;
+  padding: 8px;
+  margin-left: -8px;
 }
 
-.searchActive .searchInput {
-    font-size: 14px;
+.iconButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.iconText {
+  margin-left: 5px;
+}
+
+/* Hamburger Menu Overlay */
+.menuOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2000;
+  visibility: hidden;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  transition: all 0.4s ease;
+}
+
+.menuVisible {
+  visibility: visible;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.menuDrawer {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 350px;
+  height: calc(100% - 40px);
+  background: #F7F4E0;
+  z-index: 2;
+  transform: translateX(calc(-100% - 40px));
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  padding: 100px 50px 50px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.1);
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.menuBrand {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.menuBrandImg {
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+}
+
+.closeButton {
+  position: absolute;
+  top: 85px;
+  right: 40px;
+  background: none;
+  border: none;
+  color: #000;
+  cursor: pointer;
+  z-index: 3;
+  transition: transform 0.3s;
+}
+
+.menuVisible .menuDrawer {
+  transform: translateX(0);
+}
+
+.menuBackdrop {
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.menuVisible .menuBackdrop {
+  opacity: 1;
+}
+
+.menuNav ul {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  padding: 0;
+  list-style: none;
+}
+
+.menuNav a {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: #000;
+  text-decoration: none;
+  transition: all 0.4s;
+  position: relative;
+  display: inline-block;
+  padding: 5px 0;
+  text-transform: uppercase;
+}
+
+.menuNav a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: #000;
+  transition: width 0.4s;
+}
+
+.menuNav a:hover {
+  transform: translateX(10px);
+  opacity: 0.6;
+}
+
+.menuNav a:hover::after {
+  width: 100%;
 }
 
 @media (max-width: 768px) {
-    .headerCenter {
-        display: none;
-    }
-    .headerCenter.searchActive {
-        display: flex;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 100%;
-        background: #F8F3E8;
-        padding: 0 20px;
-        z-index: 1002;
-        align-items: center;
-    }
-    .mobileSearch {
-        display: block;
-    }
-}
+  .header {
+    padding: 15px 15px 10px;
+    height: auto !important;
+    min-height: 100px;
+    background: transparent;
+  }
 
-.cancelButton {
-    font-size: 13px;
-    color: #000;
-    white-space: nowrap;
-    padding: 0 10px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
+  .headerScrolled {
+    background: #F7F4E0 !important;
+    min-height: 90px;
+  }
 
-.cancelButton:hover {
-    opacity: 0.6;
-}
-
-/* Search Modal Content */
-.searchModalContent {
-    position: absolute;
-    top: 100%;
-    left: 0;
+  .headerLayout {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
-    height: auto;
-    min-height: 200px;
-    background: #fff;
-    z-index: 1001;
-    padding: 40px;
-    animation: fadeIn 0.3s ease;
-    border-bottom: 1px solid #eee;
+    position: relative;
+  }
+
+  .headerLeft {
+    flex: 0 0 auto !important;
+    display: flex !important;
+    align-items: center;
+    z-index: 2;
+  }
+
+  .logo {
+    position: absolute !important;
+    left: 50% !important;
+    top: 5px;
+    transform: translateX(-50%) !important;
+    font-size: 20px !important;
+    letter-spacing: 0.15em !important;
+    margin: 0 !important;
+    z-index: 1;
+    color: inherit;
+    font-weight: 500;
+  }
+
+  .headerCenter {
+    flex: 1 1 100% !important;
+    margin-top: 25px !important;
+    padding: 0 !important;
+    order: 3;
+    display: flex;
+    justify-content: center;
+  }
+
+  .headerRight {
+    flex: 0 0 auto !important;
+    z-index: 2;
+    order: 2;
+  }
+
+  .iconButton {
+    padding: 5px !important;
+  }
+
+  .iconText {
+    display: none !important;
+  }
+
+  .menuDrawer {
+    width: 85% !important;
+    max-width: 320px;
+    top: 15px !important;
+    left: 15px !important;
+    height: calc(100% - 30px) !important;
+    padding: 120px 35px 40px !important;
+    border-radius: 35px !important;
+  }
+
+  .menuBrand {
+    top: 35px !important;
+  }
+
+  .closeButton {
+    top: 75px !important;
+    right: 30px !important;
+  }
 }
+
 
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -283,12 +402,12 @@
 
 /* --- Featured Product Sections --- */
 .featuredProduct {
-    max-width: 1700px;
-    margin: 0 auto 200px;
+    max-width: 100%;
+    margin: 0 0 200px 0;
     display: grid;
-    grid-template-columns: 1.1fr 0.9fr;
-    gap: 120px;
-    padding: 0 80px;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 80px;
+    padding: 0 80px 0 0;
     align-items: center;
 }
 
@@ -300,12 +419,12 @@
 .mainImageWrapper {
     background: transparent;
     width: 100%;
-    min-height: 800px;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
     position: relative;
     overflow: hidden;
+    border-radius: 30px;
 }
 
 .thumbnailGallery {
@@ -342,12 +461,9 @@
 }
 
 .featuredImg {
-    object-fit: contain !important;
     width: 100% !important;
-    height: 100% !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
+    height: auto !important;
+    display: block;
     transition: transform 1.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -542,8 +658,11 @@
 .tickerWrapper {
     display: flex;
     width: max-content;
-    animation: tickerScroll 40s linear infinite;
-    padding: 40px 0;
+    animation: tickerScroll 60s linear infinite;
+    padding: 100px 0;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
 }
 
 .tickerWrapper:hover {
@@ -551,20 +670,20 @@
 }
 
 .tickerCard {
-    width: 600px;
-    height: 700px;
+    width: 450px; /* Reduced from 600px for better density and performance */
+    height: 550px;
     position: relative;
-    margin: 0 30px;
+    margin: 0 20px;
     overflow: hidden;
-    border-radius: 20px;
-    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.2);
-    transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
-    filter: grayscale(0.2) brightness(0.9);
+    border-radius: 40px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
 }
 
 .tickerCard:hover {
-    transform: scale(1.03) translateY(-10px);
-    filter: grayscale(0) brightness(1.1);
+    transform: scale(1.02) translateY(-10px) translate3d(0, 0, 0);
 }
 
 .tickerImg {
@@ -589,11 +708,11 @@
 
 @keyframes tickerScroll {
     0% {
-        transform: translateX(0);
+        transform: translate3d(0, 0, 0);
     }
 
     100% {
-        transform: translateX(-50%);
+        transform: translate3d(-50%, 0, 0);
     }
 }
 
@@ -677,6 +796,11 @@
     gap: 60px;
 }
 
+.threeColGrid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    max-width: 1300px; /* Narrower for 3 items to look better */
+}
+
 .productCard {
     text-decoration: none;
     color: inherit;
@@ -688,16 +812,30 @@
 
 .gridImageWrapper {
     background: transparent;
-    margin-bottom: 35px;
+    margin-bottom: 25px;
     position: relative;
     aspect-ratio: 1;
     overflow: hidden;
+    border-radius: 25px;
 }
 
 .gridImg {
-    object-fit: contain !important;
-    padding: 10px;
+    object-fit: cover !important;
     transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.soldOutBadge {
+    position: absolute;
+    bottom: 15px;
+    right: 0;
+    background: #ff0000;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    padding: 6px 15px;
+    z-index: 10;
+    text-transform: uppercase;
 }
 
 .productCard:hover .gridImg {
@@ -785,10 +923,15 @@
 }
 
 .gridName {
-    font-family: 'Kalnia', serif;
-    font-size: 28px;
-    margin-bottom: 12px;
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    line-height: 1.8;
+    margin-top: 15px;
+    margin-bottom: 5px;
     font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    padding: 0 5%;
 }
 
 .gridColors {
@@ -811,9 +954,11 @@
 }
 
 .gridPrice {
-    font-size: 20px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: #333;
+    letter-spacing: 0.05em;
 }
 
 /* Sticky Action Bar */
@@ -1266,8 +1411,8 @@
     }
     .productGrid {
         grid-template-columns: repeat(2, 1fr);
-        padding: 0 20px;
-        gap: 20px;
+        padding: 0 15px;
+        gap: 30px 15px;
     }
     .gridName {
         font-size: 16px;
@@ -1332,7 +1477,7 @@
         font-size: 32px;
     }
     .productGrid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
     .sectionTitle {
         font-size: 32px;

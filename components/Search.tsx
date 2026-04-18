@@ -96,7 +96,7 @@ export default function Search({ isScrolled, onOpenChange }: SearchProps) {
                   {query ? (isSearching ? "RECHERCHE EN COURS..." : (results.length > 0 ? "RÉSULTATS" : "AUCUN RÉSULTAT")) : "RECHERCHES TENDANCES"}
                 </h4>
                 <button className={styles.closeModalBtn} onClick={handleClose}>
-                  <X size={20} />
+                  <X size={18} strokeWidth={1} />
                 </button>
               </div>
               
@@ -106,7 +106,7 @@ export default function Search({ isScrolled, onOpenChange }: SearchProps) {
                     {results.map(product => (
                       <Link 
                         key={product.id} 
-                        href={`/shop?q=${encodeURIComponent(product.name)}`} 
+                        href={`/shop/${product.id}`} 
                         className={styles.productResultItem}
                         onClick={handleClose}
                       >
@@ -115,7 +115,7 @@ export default function Search({ isScrolled, onOpenChange }: SearchProps) {
                         </div>
                         <div className={styles.resultInfo}>
                           <p className={styles.resultName}>{product.name}</p>
-                          <p className={styles.resultPrice}>{product.price} TND</p>
+                          <p className={styles.resultPrice}>{product.price} €</p>
                         </div>
                       </Link>
                     ))}

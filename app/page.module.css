@@ -145,7 +145,7 @@
 }
 
 .logoImg {
-  height: 100%;
+  height: 60%;
   width: auto;
   object-fit: contain;
 }
@@ -188,7 +188,8 @@
   z-index: 2;
   transform: translateX(calc(-100% - 40px));
   transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-  padding: 100px 50px 50px; /* Space for the new top brand title */
+  padding: 100px 50px 50px;
+  /* Space for the new top brand title */
   display: flex;
   flex-direction: column;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.1);
@@ -216,7 +217,8 @@
 
 .closeButton {
   position: absolute;
-  top: 85px; /* Moved down under the title area */
+  top: 85px;
+  /* Moved down under the title area */
   right: 40px;
   background: none;
   border: none;
@@ -416,14 +418,14 @@
 .welcomeContainer {
   max-width: 900px;
   padding: 0 40px;
-  text-align: left;
+  text-align: center;
 }
 
 .welcomeHeading {
-  font-family: 'Work Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.3em;
+  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.35em;
   color: #1c1c1c;
   margin-bottom: 45px;
   text-transform: uppercase;
@@ -432,23 +434,25 @@
 
 .welcomeText {
   font-family: 'Work Sans', sans-serif;
-  font-size: 28px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.8;
   color: #1c1c1c;
-  font-weight: 300;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .welcomeText em {
   font-style: italic;
-  font-family: 'Cormorant Garamond', serif;
+  font-family: inherit;
 }
 
 @media (max-width: 768px) {
   .welcomeSection {
     padding: 80px 0;
   }
-  
+
   .welcomeText {
     font-size: 22px;
   }
@@ -569,7 +573,7 @@
   width: 100%;
   padding: 18px 0;
   border: none;
-  border-bottom: 1.5px solid rgba(255,255,255,0.6);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.6);
   outline: none;
   font-size: 15px;
   background: transparent;
@@ -584,7 +588,7 @@
 }
 
 .newsletterInput::placeholder {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   font-weight: 300;
 }
 
@@ -595,7 +599,7 @@
   gap: 15px;
   font-size: 11px;
   line-height: 1.6;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .checkboxWrapper input {
@@ -772,7 +776,7 @@
 .footerBottomMobile {
   margin-top: 60px;
   padding-top: 30px;
-  border-top: 1px solid rgba(0,0,0,0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -910,8 +914,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   z-index: 10;
   transition: all 0.3s ease;
@@ -938,9 +942,11 @@
   .arrowLeft {
     left: 80px;
   }
+
   .arrowRight {
     right: 80px;
   }
+
   .sliderArrow {
     width: 44px;
     height: 44px;
@@ -1071,24 +1077,24 @@
 }
 
 .instaHeading {
-  font-family: 'Cormorant Garamond', 'Cormorant', Georgia, serif;
-  font-size: 26px;
-  font-weight: 400;
-  letter-spacing: 0.35em;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
   color: #1c1c1c;
-  margin-bottom: 12px;
+  margin-bottom: 22px;
   text-transform: uppercase;
 }
 
 .instaSubtext {
-  font-family: 'Work Sans', sans-serif;
-  font-size: 14px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 15px;
   color: #1c1c1c;
-  letter-spacing: 0.02em;
-  max-width: 800px;
+  letter-spacing: 0.05em;
+  max-width: 700px;
   margin: 0 auto;
-  line-height: 1.8;
-  opacity: 0.9;
+  line-height: 1.6;
+  opacity: 0.8;
 }
 
 .instaTicker {
@@ -1117,6 +1123,7 @@
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(-50%);
   }
@@ -1124,8 +1131,8 @@
 
 @media (max-width: 768px) {
   .instaTickerItem {
-    flex: 0 0 250px;
-    height: 350px;
+    flex: 0 0 calc(100vw / 6);
+    height: 40vw; /* Tall vertical format for 6 items scale */
   }
 }
 
@@ -1273,21 +1280,29 @@
   }
 
   .categoryGrid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0 !important;
   }
 
   .cardContent {
-    left: 20px !important;
-    bottom: 20px !important;
+    left: 15px !important;
+    bottom: 15px !important;
   }
 
   .hollowTitle {
-    font-size: 50px !important;
-    margin-bottom: -20px !important;
+    display: none !important;
   }
 
   .solidTitle {
-    font-size: 24px !important;
+    font-size: 18px !important;
+    font-weight: 500 !important;
+    margin-bottom: 0 !important;
+    text-transform: none !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .cardLink {
+    display: none !important;
   }
 
   .footerGrid {
@@ -1353,65 +1368,20 @@
   }
 
   .instaHeading {
-    font-size: 22px;
-    margin-bottom: 28px;
+    font-size: 24px;
+    letter-spacing: 0.15em;
+    margin-bottom: 20px;
+    white-space: nowrap;
+  }
+
+  .instaSubtext {
+    font-size: 13px;
     padding: 0 20px;
-  }
-
-  .instaSliderContainer {
-    gap: 0;
-    margin-bottom: 32px;
-    padding: 0;
-    width: 100%;
-    position: relative;
-  }
-
-  .instaArrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-    border: 1px solid rgba(0,0,0,0.25);
-    background: rgba(247, 244, 224, 0.85);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  }
-
-  .instaArrowLeft {
-    left: 8px;
-  }
-
-  .instaArrowRight {
-    right: 8px;
-  }
-
-  .instaFeedWrapper {
-    gap: 12px;
-    padding: 16px 48px;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .instaCard {
-    width: 72vw;
-    height: 72vw;
-    scroll-snap-align: center;
-    border-radius: 16px;
-  }
-}
-
-@media (max-width: 480px) {
-  .heroTitle {
-    font-size: 32px !important;
-  }
-
-  .instaCard {
-    width: 78vw;
-    height: 78vw;
+    margin-bottom: 40px;
+    line-height: 1.5;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
@@ -1833,6 +1803,7 @@
     max-height: 100vh;
   }
 }
+
 @media (max-width: 768px) {
   .headerCenter.searchActive {
     flex: 10;
@@ -1902,9 +1873,11 @@
   .instaGrid {
     grid-template-columns: repeat(3, 1fr);
   }
+
   .joinJourney {
     padding: 40px 24px 32px;
   }
+
   .joinJourneyHeading {
     font-size: 13px;
   }

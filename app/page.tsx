@@ -11,6 +11,8 @@ import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
 
 const LoadingScreen = dynamic(() => import('@/components/LoadingScreen'), { ssr: false });
+const Header = dynamic(() => import('@/components/Header'), { ssr: false });
+const Footer = dynamic(() => import('@/components/Footer'), { ssr: false });
 const Search = dynamic(() => import('@/components/Search'), { ssr: false });
 
 const Star = () => (
@@ -50,7 +52,6 @@ const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) =
   const reviews = [3, 5, 1, 4];
   return (
     <section className={styles.featuredProducts}>
-      <h4 className={styles.featuredSubtitle}>FOR THE INDECISIVE SOUL</h4>
       <h2 className={styles.featuredTitle}>DESIGN YOUR OWN</h2>
       <div className={styles.sliderWrapper}>
         <div className={styles.productsGrid} id="featuredGrid">
@@ -119,47 +120,32 @@ const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) =
 });
 FeaturedProductsSection.displayName = 'FeaturedProductsSection';
 
-const CategoriesSection = React.memo(({ cmsContent }: any) => (
+const CategoriesSection = React.memo(({ categories }: { categories: any[] }) => (
   <section className={styles.categoryGrid}>
-    <Link href="/shop?category=sacs" className={styles.categoryCard}>
-      <Image src={cmsContent.cat1_image || "/images/bags.png"} alt="Sacs" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
-      <div className={styles.cardContent}>
-        <h2 className={styles.hollowTitle}>{cmsContent.cat1_title || "Sacs"}</h2>
-        <h3 className={styles.solidTitle}>{cmsContent.cat1_title?.toLowerCase() || "sacs"}</h3>
-        <span className={styles.cardLink}>Plus d&apos;informations</span>
-      </div>
-    </Link>
-    <Link href="/shop?category=vêtements" className={styles.categoryCard}>
-      <Image src={cmsContent.cat2_image || "/images/clothing.png"} alt="Vêtements" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
-      <div className={styles.cardContent}>
-        <h2 className={styles.hollowTitle}>{cmsContent.cat2_title || "Vêtements"}</h2>
-        <h3 className={styles.solidTitle}>{cmsContent.cat2_title?.toLowerCase() || "vêtements"}</h3>
-        <span className={styles.cardLink}>Plus d&apos;informations</span>
-      </div>
-    </Link>
-    <Link href="/shop?category=bijoux" className={styles.categoryCard}>
-      <Image src={cmsContent.cat3_image || "/images/jewelry.png"} alt="Bijoux" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
-      <div className={styles.cardContent}>
-        <h2 className={styles.hollowTitle}>{cmsContent.cat3_title || "Bijoux"}</h2>
-        <h3 className={styles.solidTitle}>{cmsContent.cat3_title?.toLowerCase() || "bijoux"}</h3>
-        <span className={styles.cardLink}>Plus d&apos;informations</span>
-      </div>
-    </Link>
-    <Link href="/shop?category=chaussures" className={styles.categoryCard}>
-      <Image src={cmsContent.cat4_image || "/images/shoes.png"} alt="Chaussures" fill sizes="(max-width: 768px) 100vw, 50vw" className={styles.catImg} loading="lazy" />
-      <div className={styles.cardContent}>
-        <h2 className={styles.hollowTitle}>{cmsContent.cat4_title || "Chaussures"}</h2>
-        <h3 className={styles.solidTitle}>{cmsContent.cat4_title?.toLowerCase() || "chaussures"}</h3>
-        <span className={styles.cardLink}>Plus d&apos;informations</span>
-      </div>
-    </Link>
+    {categories.filter(c => c.id !== "ALL").slice(0, 4).map((cat: any) => (
+      <Link key={cat.id} href={`/shop?category=${cat.id}`} className={styles.categoryCard}>
+        <Image 
+          src={cat.image_url || "/images/bags.png"} 
+          alt={cat.name} 
+          fill 
+          sizes="(max-width: 768px) 100vw, 50vw" 
+          className={styles.catImg} 
+          loading="lazy" 
+        />
+        <div className={styles.cardContent}>
+          <h2 className={styles.hollowTitle}>{cat.name}</h2>
+          <h3 className={styles.solidTitle}>{cat.name}</h3>
+          <span className={styles.cardLink}>Plus d&apos;informations</span>
+        </div>
+      </Link>
+    ))}
   </section>
 ));
 
 const WelcomeSection = React.memo(() => (
   <section className={styles.welcomeSection}>
     <div className={styles.welcomeContainer}>
-      <h2 className={styles.welcomeHeading}>WELCOME TO S E A U R A</h2>
+      <h2 className={styles.welcomeHeading}>WELCOME TO SEAURA</h2>
       <p className={styles.welcomeText}>
         Introducing our latest limited edition edit. Handcrafted in our studio and designed to make you feel confident, effortlessly refined and <em>entirely yourself.</em>
       </p>
@@ -177,12 +163,12 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
   const scrollDirection = useRef(-1); // -1 for RTL, 1 for LTR
   const velocity = useRef(-0.8); // Current movement velocity
   const requestRef = useRef<number | null>(null);
-  
+
   const posts = useMemo(() => {
     const keys = Object.keys(cmsContent)
       .filter(key => key.startsWith('instagram_post_'))
       .sort((a, b) => parseInt(a.split('_')[2]) - parseInt(b.split('_')[2]));
-    
+
     // Triple the posts to ensure smooth looping even on large screens and during fast drags
     return [...keys, ...keys, ...keys].map((key, index) => {
       let postData = { image_url: "/images/hero.png", instagram_url: "https://instagram.com" };
@@ -193,7 +179,7 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
 
   const animate = useCallback(() => {
     if (!trackRef.current) return;
-    
+
     if (!isDragging.current) {
       const track = trackRef.current;
       const totalWidth = track.scrollWidth;
@@ -201,7 +187,7 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
         requestRef.current = requestAnimationFrame(animate);
         return;
       }
-      
+
       scrollLeft.current += velocity.current;
       const viewWidth = totalWidth / 3; // Because we tripled the items
 
@@ -210,10 +196,10 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
       } else if (scrollLeft.current >= 0) {
         scrollLeft.current -= viewWidth;
       }
-      
+
       track.style.transform = `translateX(${scrollLeft.current}px)`;
     }
-    
+
     requestRef.current = requestAnimationFrame(animate);
   }, []);
 
@@ -236,27 +222,27 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDragging.current || !trackRef.current) return;
-    
+
     const pageX = 'touches' in e ? e.touches[0].pageX : (e as React.MouseEvent).pageX;
     const x = pageX - startX.current;
-    
+
     // Update velocity based on drag direction for a natural feel when released
     const delta = x - scrollLeft.current;
     if (Math.abs(delta) > 0.1) {
-       velocity.current = delta * 0.2 + (velocity.current * 0.8);
-       velocity.current = Math.max(Math.min(velocity.current, 10), -10);
-       
-       // Update base direction based on drag direction
-       if (Math.abs(velocity.current) > 0.5) {
-         scrollDirection.current = velocity.current > 0 ? 1 : -1;
-       }
+      velocity.current = delta * 0.2 + (velocity.current * 0.8);
+      velocity.current = Math.max(Math.min(velocity.current, 10), -10);
+
+      // Update base direction based on drag direction
+      if (Math.abs(velocity.current) > 0.5) {
+        scrollDirection.current = velocity.current > 0 ? 1 : -1;
+      }
     }
 
     scrollLeft.current = x;
-    
+
     const track = trackRef.current;
     const viewWidth = track.scrollWidth / 3;
-    
+
     if (scrollLeft.current <= -viewWidth) {
       scrollLeft.current += viewWidth;
       startX.current += viewWidth;
@@ -264,7 +250,7 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
       scrollLeft.current -= viewWidth;
       startX.current -= viewWidth;
     }
-    
+
     track.style.transform = `translateX(${scrollLeft.current}px)`;
   };
 
@@ -284,7 +270,7 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
     const interval = setInterval(() => {
       if (!isDragging.current) {
         // Return to 0.8 (or -0.8) based on last swipe direction
-        const targetSpeed = isHovered ? 0 : scrollDirection.current * 0.8; 
+        const targetSpeed = isHovered ? 0 : scrollDirection.current * 0.8;
         velocity.current += (targetSpeed - velocity.current) * 0.05;
       }
     }, 100);
@@ -292,7 +278,7 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
   }, [isHovered]);
 
   return (
-    <section 
+    <section
       className={styles.instagramFeed}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
@@ -304,8 +290,8 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
         <h2 className={styles.instaHeading}>JOIN OUR JOURNEY</h2>
         <p className={styles.instaSubtext}>Keep up to date with everything With Lyberty - from our journey to the way each collection comes to life</p>
       </div>
-      
-      <div 
+
+      <div
         className={styles.instaTicker}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -314,16 +300,16 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp}
       >
-        <div 
-          className={styles.instaTickerTrack} 
+        <div
+          className={styles.instaTickerTrack}
           ref={trackRef}
           style={{ cursor: 'grab', userSelect: 'none' }}
         >
           {posts.map((post) => (
-            <Link 
-              key={post.key} 
-              href={post.instagram_url} 
-              target="_blank" 
+            <Link
+              key={post.key}
+              href={post.instagram_url}
+              target="_blank"
               className={styles.instaTickerItem}
               onClick={(e) => {
                 // Prevent navigation if user was dragging
@@ -331,13 +317,13 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
               }}
               draggable={false}
             >
-              <Image 
-                src={post.image_url} 
-                alt="Instagram Post" 
-                fill 
-                sizes="(max-width: 768px) 300px, 400px" 
-                className={styles.instaImg} 
-                loading="lazy" 
+              <Image
+                src={post.image_url}
+                alt="Instagram Post"
+                fill
+                sizes="(max-width: 768px) 300px, 400px"
+                className={styles.instaImg}
+                loading="lazy"
                 draggable={false}
               />
               <div className={styles.instaOverlay}>
@@ -420,7 +406,7 @@ export default function Home() {
       body: JSON.stringify({
         query: `query { 
           homeContent { key value } 
-          categories { id name } 
+          categories { id name image_url sub_categories { id name } } 
           products(limit: 4) { id name price image_url }
         }`
       })
@@ -541,89 +527,17 @@ export default function Home() {
 
   return (
     <main className={styles.main}>
-      {/* Header */}
-      <header className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""}`}>
-        <div className={styles.headerLayout}>
-          <div className={styles.headerLeft}>
-            <button className={styles.menuButton} onClick={() => setIsMenuOpen(true)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
-            <div className={styles.logo}>
-              <Image 
-                src="/logo1.png" 
-                alt="SEAURA Logo" 
-                width={150} 
-                height={40} 
-                className={styles.logoImg}
-                priority
-              />
-            </div>
-          </div>
-
-          <div className={`${styles.headerCenter} ${isSearchOpen ? styles.searchActive : ""}`}>
-            <Search isScrolled={isScrolled} onOpenChange={handleIsSearchOpen} />
-          </div>
-
-          <div className={styles.headerRight}>
-            <Link href={session ? ((session.user as any).role === 'ADMIN' ? "/admin/dashboard" : "/dashboard") : "/auth/signin"} className={styles.iconButton}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="8" r="5" />
-                <path d="M20 21a8 8 0 00-16 0" />
-              </svg>
-              <span className={styles.iconText}>{session ? "Mon Compte" : "Connexion"}</span>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Hamburger Menu Overlay */}
-      <div
-        className={`${styles.menuOverlay} ${isMenuOpen ? styles.menuVisible : ""}`}
-        onClick={() => setIsMenuOpen(false)}
-      >
-        <div className={styles.menuDrawer} onClick={(e) => e.stopPropagation()}>
-          <button className={styles.closeButton} onClick={() => setIsMenuOpen(false)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-
-          <div className={styles.menuBrand}>
-            <Image 
-              src="/logo1.png" 
-              alt="SEAURA Logo" 
-              width={120} 
-              height={30} 
-              className={styles.menuBrandImg}
-            />
-          </div>
-
-          <nav className={styles.menuNav}>
-            <ul>
-              <li><Link href="/shop" onClick={() => setIsMenuOpen(false)}>NEW IN</Link></li>
-              {categories.map((cat) => (
-                <li key={cat.id}>
-                  <Link
-                    href={`/shop?category=${cat.name.toLowerCase()}`}
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {cat.name.toUpperCase()}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </div>
-        <div className={styles.menuBackdrop} onClick={() => setIsMenuOpen(false)}></div>
-      </div>
+      {/* Shared Header Component */}
+      <Header 
+        categories={categories}
+        onCartClick={() => setIsChatOpen(true)} // Note: on home page, maybe they want cart or chat? Home page didn't have a cart drawer yet.
+      />
 
       {/* Hero Section */}
       <HeroSection cmsContent={cmsContent} heroImages={heroImages} currentHeroIndex={currentHeroIndex} />
 
       {/* Category Grid */}
-      <CategoriesSection cmsContent={cmsContent} />
+      <CategoriesSection categories={categories} />
 
       {/* Welcome Section */}
       <WelcomeSection />
@@ -647,69 +561,7 @@ export default function Home() {
       <InstagramSection cmsContent={cmsContent} />
 
       {/* Footer */}
-      <footer className={styles.footer}>
-        <div className={styles.footerGrid}>
-          <div className={styles.footerCol}>
-            <h3 className={styles.footerHeading}>JOIN THE CLUB</h3>
-            <p className={styles.footerText}>Sign up for 10% off your first order and monthly subscriber-only discounts</p>
-            <div className={styles.footerSubscribeGroup}>
-              <input 
-                type="email" 
-                placeholder="Enter your email address" 
-                className={styles.footerInputExact}
-                value={inlineEmail}
-                onChange={(e) => setInlineEmail(e.target.value)}
-              />
-              <button 
-                className={styles.footerSubmitExact}
-                onClick={() => handleSubscribe(inlineEmail, false)}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "..." : "SUBSCRIBE"}
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.footerCol}>
-            <h3 className={styles.footerHeading}>SHOP WITH LYBERTY</h3>
-            <ul className={styles.footerLinks}>
-              <li><Link href="/shop">Shop All</Link></li>
-              <li><Link href="/shop">New Arrivals</Link></li>
-              <li><Link href="/shop">Design Your Own Jewellery</Link></li>
-              <li><Link href="/shop">Charm Builder</Link></li>
-              <li><Link href="/shop">Charms</Link></li>
-              <li><Link href="/shop">Necklaces</Link></li>
-              <li><Link href="/shop">Bracelets</Link></li>
-              <li><Link href="/shop">Earrings</Link></li>
-            </ul>
-          </div>
-
-          <div className={styles.footerCol}>
-            <h3 className={styles.footerHeading}>CUSTOMER SERVICE</h3>
-            <ul className={styles.footerLinks}>
-              <li><a href="#">Search</a></li>
-              <li><a href="#">About</a></li>
-              <li><a href="#">Shipping</a></li>
-              <li><a href="#">Materials & Care</a></li>
-              <li><a href="#">Charm Style Guide</a></li>
-              <li><a href="#">Bracelet Size Guide</a></li>
-              <li><a href="#">Returns</a></li>
-              <li><a href="#">Contact</a></li>
-              <li><a href="#">Terms & Conditions</a></li>
-              <li><a href="#">Privacy Policy</a></li>
-            </ul>
-          </div>
-
-          <div className={styles.footerCol}>
-            <h3 className={styles.footerHeading}>FOLLOW US</h3>
-            <div className={styles.footerSocialIcons}>
-              <a href="https://facebook.com" target="_blank" className={styles.socialIconLink}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" /></svg></a>
-              <a href="https://instagram.com" target="_blank" className={styles.socialIconLink}><Instagram size={14} /></a>
-              <a href="https://tiktok.com" target="_blank" className={styles.socialIconLink}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.11-1.47-.17-.12-.34-.24-.5-.38-.01 2.06.01 4.13-.01 6.19-.01 2.21-.55 4.47-1.92 6.13-1.43 1.75-3.69 2.78-5.96 2.82-2.45.03-5.02-.91-6.57-2.91-1.57-1.97-1.91-4.71-1.07-7.05.74-2.13 2.53-3.87 4.67-4.63.15-.05.3-.11.45-.15.01-.01.01-.02.02-.02V8.9c-.3.08-.59.18-.88.3-2.07.82-3.7 2.72-4.14 4.93-.41 1.95.03 4.1.99 5.81.99 1.79 2.91 3.1 4.96 3.32 1.45.17 2.97-.12 4.16-.99 1.4-1.01 2.23-2.65 2.22-4.4V3.01l.01-.01c-.13-.9-.37-1.81-.79-2.63-.12-.24-.25-.49-.39-.72l.01-.01z" /></svg></a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer onSubscribe={async (email) => { await handleSubscribe(email, false); }} />
 
 
       {/* Chat Bubble & Window */}
