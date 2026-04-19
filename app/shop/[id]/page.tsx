@@ -63,7 +63,7 @@ function ShopDetail() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -280,6 +280,7 @@ function ShopDetail() {
                 cartCount={cart.length}
                 wishlistCount={wishlist.length}
                 onCartClick={() => setIsCartOpen(true)}
+                forceBlack={true}
             />
 
             {/* PRODUCT DETAIL SECTION */}
@@ -287,6 +288,7 @@ function ShopDetail() {
                 <div className={styles.productDisplay}>
                     <div className={styles.mainImageWrapper}>
                         <Image src={(product.images && product.images.length > 0) ? product.images[selectedImageIndex] : (product.image_url || "/images/clothing.png")} alt={product.name} width={1200} height={1500} className={styles.featuredImg} priority quality={85} />
+                        {product.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
                     </div>
                     {product.images && product.images.length > 1 && (
                         <div className={styles.thumbnailGallery}>
@@ -340,32 +342,6 @@ function ShopDetail() {
                 </div>
             </section>
 
-            {/* TICKER SECTION - CATEGORY NAVIGATION */}
-            <section className={styles.portraitSection}>
-                <div className={styles.tickerWrapper}>
-                    {[...Array(2)].map((_, loopIdx) => (
-                        <Fragment key={loopIdx}>
-                            {categories.filter(c => c.id !== "ALL").map((cat, idx) => (
-                                <Link href={`/shop?category=${cat.id}`} key={`${loopIdx}-${idx}`} className={styles.tickerCard}>
-                                    <Image 
-                                        src={cat.image_url || "/images/hero.png"} 
-                                        alt={cat.name} 
-                                        fill 
-                                        sizes="450px"
-                                        className={styles.tickerImg} 
-                                        unoptimized={cat.image_url?.startsWith('data:')}
-                                        priority={idx < 4}
-                                    />
-                                    <div className={styles.tickerOverlay}>
-                                        <span className="text-[10px] tracking-[0.5em] uppercase font-black mb-2 block opacity-60 text-white">Explorez la Collection</span>
-                                        <h4 className="text-3xl font-light italic text-white">{cat.name}</h4>
-                                    </div>
-                                </Link>
-                            ))}
-                        </Fragment>
-                    ))}
-                </div>
-            </section>
 
             {/* RELATED SECTION */}
             {historyItems.length > 0 && (
@@ -379,6 +355,7 @@ function ShopDetail() {
                             <div key={p.id} className={styles.productCard}>
                                 <div className={styles.gridImageWrapper}>
                                     <Image src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} alt={p.name} fill className={styles.gridImg} sizes="(max-width: 768px) 100vw, 25vw" />
+                                    {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
                                     <div className={styles.cardQuickAdd}>
                                         <div className="flex gap-2 w-full p-4">
                                             <button onClick={() => addToCart(p)} className="flex-1 bg-black text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-full hover:scale-105 active:scale-95 transition-all">Add +</button>

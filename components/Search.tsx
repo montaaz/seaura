@@ -9,10 +9,17 @@ import { Search as SearchIcon, X } from "lucide-react";
 interface SearchProps {
   isScrolled: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  forceOpen?: boolean;
 }
 
-export default function Search({ isScrolled, onOpenChange }: SearchProps) {
+export default function Search({ isScrolled, onOpenChange, forceOpen }: SearchProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpen) {
+      setIsOpen(true);
+    }
+  }, [forceOpen]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);

@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { MessageCircle, Send, X as CloseIcon, User as UserIcon, ArrowUp, Instagram, ShoppingBag, Heart, Plus, Trash2, ChevronRight, ChevronLeft } from "lucide-react";
+import { MessageCircle, Send, X as CloseIcon, User as UserIcon, ArrowUp, Instagram, ShoppingBag, Heart, Plus, Trash2, ChevronRight, ChevronLeft, ChevronDown, Bookmark } from "lucide-react";
 import dynamic from "next/dynamic";
 import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
@@ -38,6 +38,23 @@ function ShopListing() {
     const [sessionId, setSessionId] = useState<string>("");
     const [isCartLoaded, setIsCartLoaded] = useState(false);
     const [wishlist, setWishlist] = useState<any[]>([]);
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+    const [selectedColor, setSelectedColor] = useState<string | null>(null);
+    const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
+
+    const colors = [
+        { name: "Marron", hex: "#7B5542" }, { name: "Noir", hex: "#000000" },
+        { name: "Camel", hex: "#B68B5C" }, { name: "Ecru", hex: "#F5F5DC" },
+        { name: "Vert", hex: "#32CD32" }, { name: "Bordeaux", hex: "#800020" },
+        { name: "Beige", hex: "#F5F5DC" }, { name: "Naturel", hex: "#D2B48C" },
+        { name: "Bleu", hex: "#1E90FF" }, { name: "Gris", hex: "#808080" },
+        { name: "Jaune", hex: "#FFFF00" }, { name: "Multicolore", hex: "linear-gradient(45deg, red, blue, green, yellow)" },
+        { name: "Orange", hex: "#FFA500" }, { name: "Doré", hex: "#FFD700" },
+        { name: "Rouge", hex: "#FF0000" }, { name: "Rose", hex: "#FFC0CB" },
+        { name: "Argent", hex: "#C0C0C0" }, { name: "Blanc", hex: "#FFFFFF" },
+        { name: "Violet", hex: "#8A2BE2" }
+    ];
+
     const [searchQuery, setSearchQuery] = useState("");
     const [cmsContent, setCmsContent] = useState<Record<string, string>>({});
     const searchParams = useSearchParams();
@@ -49,7 +66,11 @@ function ShopListing() {
         const matchesSearch = !searchQuery ||
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesSearch;
+        const matchesPrice = parseFloat(p.price) >= priceRange[0] && parseFloat(p.price) <= priceRange[1];
+        // Note: Color filtering would need product color data, assuming p.colors matches
+        const matchesColor = !selectedColor || p.colors?.some((c: any) => c.name.toLowerCase() === selectedColor.toLowerCase());
+
+        return matchesCategory && matchesSearch && matchesPrice && matchesColor;
     });
 
     useEffect(() => {
@@ -60,7 +81,7 @@ function ShopListing() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -143,50 +164,185 @@ function ShopListing() {
         document.body.style.overflow = val ? 'hidden' : 'auto';
     };
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!(event.target as Element).closest(`.${styles.filterGroup}`)) {
+                setActiveDropdown(null);
+            }
+        };
+        if (activeDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [activeDropdown]);
+
     if (loading) return <LoadingScreen duration={2000} onComplete={() => setLoading(false)} />;
 
     return (
         <div className={`${styles.shopContainer} ${isSearchOpen ? styles.noScroll : ""}`}>
-            <Header 
+            <Header
                 categories={categories}
                 cartCount={cart.length}
                 wishlistCount={wishlist.length}
                 onCartClick={() => setIsCartOpen(true)}
+                forceBlack={true}
             />
 
-            <section className={styles.relatedSection} style={{ marginTop: '140px' }}>
-                <div className={styles.sectionTitleBlock}>
-                    <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
-                    <h2 className={styles.sectionTitle}>
-                        {activeFilter === 'ALL' ? 'Tout le Catalogue' : categories.find(c => c.id === activeFilter)?.name}
-                    </h2>
-                </div>
-                <div className={styles.productGrid}>
-                    {filteredProducts.map((p: any) => (
-                        <div key={p.id} className={styles.productCard}>
-                            <div className={styles.gridImageWrapper}>
-                                <Link href={`/shop/${p.id}`} className="relative block w-full h-full">
-                                    <Image 
-                                        src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} 
-                                        alt={p.name} 
-                                        fill 
-                                        className={styles.gridImg} 
-                                        sizes="(max-width: 768px) 50vw, 25vw" 
-                                    />
-                                </Link>
-                                {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
-                            </div>
-                            <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
-                                <h4 className={styles.gridName}>{p.name}</h4>
-                                <div className={styles.gridPrice}>£{p.price}</div>
-                            </Link>
-                        </div>
+            <div className={styles.shopTopControls} style={{ marginTop: '40px' }}>
+                <h2 className={styles.sectionTitle}>
+                    {activeFilter === 'ALL' ? 'Tout Voir' : categories.find(c => c.id === activeFilter)?.name}
+                </h2>
+
+                <div className={styles.categoryNav}>
+                    {categories.map((cat: any) => (
+                        <span
+                            key={cat.id}
+                            className={`${styles.catNavItem} ${activeFilter === cat.id ? styles.catNavItemActive : ""}`}
+                            onClick={() => setActiveFilter(cat.id)}
+                        >
+                            {cat.id === "ALL" ? "Tout Voir" : cat.name}
+                        </span>
                     ))}
-                    {filteredProducts.length === 0 && (
-                        <div className="col-span-full py-20 text-center text-gray-400 italic">Aucun produit trouvé dans cette catégorie.</div>
-                    )}
                 </div>
-            </section>
+
+                <div className={styles.filterBar}>
+                    <div className={styles.filterGroup}>
+                        <button
+                            className={`${styles.filterBtn} ${activeDropdown === 'color' ? styles.filterBtnActive : ""}`}
+                            onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
+                        >
+                            Couleur <ChevronDown size={14} className={activeDropdown === 'color' ? styles.rotateIcon : ""} />
+                        </button>
+                        {activeDropdown === 'color' && (
+                            <div className={styles.dropdownContent}>
+                                <div className={styles.colorGrid}>
+                                    {colors.map((color) => (
+                                        <div
+                                            key={color.name}
+                                            className={`${styles.colorOption} ${selectedColor === color.name ? styles.colorOptionSelected : ""}`}
+                                            onClick={() => setSelectedColor(color.name)}
+                                        >
+                                            <div className={styles.colorSquare} style={{ background: color.hex, border: color.name === 'Blanc' ? '1px solid #ddd' : 'none' }} />
+                                            <span className={styles.colorName}>{color.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className={styles.dropdownFooter}>
+                                    <button className={styles.clearBtn} onClick={() => setSelectedColor(null)}>Effacer</button>
+                                    <button className={styles.applyBtn} onClick={() => setActiveDropdown(null)}>Voir {filteredProducts.length} produits</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className={styles.filterGroup}>
+                        <button
+                            className={`${styles.filterBtn} ${activeDropdown === 'price' ? styles.filterBtnActive : ""}`}
+                            onClick={() => setActiveDropdown(activeDropdown === 'price' ? null : 'price')}
+                        >
+                            Prix <ChevronDown size={14} className={activeDropdown === 'price' ? styles.rotateIcon : ""} />
+                        </button>
+                        {activeDropdown === 'price' && (
+                            <div className={styles.dropdownContent}>
+                                <div className={styles.priceContainer}>
+                                    <div className={styles.rangeSliderWrapper}>
+                                        <div className={styles.rangeTrackBase} />
+                                        <div
+                                            className={styles.rangeTrackActive}
+                                            style={{
+                                                left: `${(priceRange[0] / 1000) * 100}%`,
+                                                right: `${100 - (priceRange[1] / 1000) * 100}%`
+                                            }}
+                                        />
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1000"
+                                            value={priceRange[0]}
+                                            onChange={(e) => {
+                                                const val = Math.min(parseInt(e.target.value), priceRange[1] - 10);
+                                                setPriceRange([val, priceRange[1]]);
+                                            }}
+                                            className={`${styles.rangeInput} ${styles.rangeInputMin}`}
+                                        />
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1000"
+                                            value={priceRange[1]}
+                                            onChange={(e) => {
+                                                const val = Math.max(parseInt(e.target.value), priceRange[0] + 10);
+                                                setPriceRange([priceRange[0], val]);
+                                            }}
+                                            className={`${styles.rangeInput} ${styles.rangeInputMax}`}
+                                        />
+                                    </div>
+                                    <div className={styles.priceLabels}>
+                                        <span>{priceRange[0]} dt</span>
+                                        <span>{priceRange[1]} dt</span>
+                                    </div>
+                                </div>
+                                <div className={styles.dropdownFooter}>
+                                    <button className={styles.clearBtn} onClick={() => setPriceRange([0, 1000])}>Effacer</button>
+                                    <button className={styles.applyBtn} onClick={() => setActiveDropdown(null)}>Voir {filteredProducts.length} produits</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className={styles.productGrid}>
+                {filteredProducts.map((p: any) => (
+                    <div key={p.id} className={styles.productCard}>
+                        <div className={styles.gridImageWrapper}>
+                            <Link href={`/shop/${p.id}`} className="relative block w-full h-full">
+                                <Image
+                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")}
+                                    alt={p.name}
+                                    fill
+                                    className={styles.gridImg}
+                                    sizes="(max-width: 768px) 50vw, 25vw"
+                                />
+                            </Link>
+                            {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
+                        </div>
+                        <div className={styles.gridInfo}>
+                            <div className={styles.gridMainRow}>
+                                <Link href={`/shop/${p.id}`} className={styles.gridName}>
+                                    {p.name}
+                                </Link>
+                                <button
+                                    onClick={() => toggleWishlist(p)}
+                                    className={styles.wishlistBtn}
+                                >
+                                    <Heart
+                                        size={14}
+                                        className={wishlist.find((w: any) => w.id === p.id) ? styles.heartActive : ""}
+                                    />
+                                </button>
+                            </div>
+                            <div className={styles.gridPrice}>
+                                {parseFloat(p.price).toFixed(2)} <span className={styles.currency}>dt</span>
+                            </div>
+                            {p.colors && p.colors.length > 0 && (
+                                <div className={styles.gridColors}>
+                                    {p.colors.slice(0, 3).map((c: any, idx: number) => (
+                                        <div
+                                            key={idx}
+                                            className={styles.gridColorSwatch}
+                                            style={{ backgroundColor: c.hex }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+                {filteredProducts.length === 0 && (
+                    <div className="col-span-full py-20 text-center text-gray-400 italic">Aucun produit trouvé dans cette catégorie.</div>
+                )}
+            </div>
 
             <Footer />
 

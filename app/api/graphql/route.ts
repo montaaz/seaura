@@ -171,6 +171,7 @@ const typeDefs = gql`
     createSubCategory(name: String!, category_id: ID!, image_url: String): SubCategory!
     updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
     deleteSubCategory(id: ID!): Boolean!
+    deleteCart(sessionId: String!): Boolean!
   }
 `;
 
@@ -422,6 +423,11 @@ const resolvers = {
         "INSERT INTO carts (session_id, items, updated_at) VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP) ON CONFLICT (session_id) DO UPDATE SET items = EXCLUDED.items, updated_at = CURRENT_TIMESTAMP",
         [sessionId, items]
       );
+      return true;
+    },
+    deleteCart: async (_: any, { sessionId }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM carts WHERE session_id = $1", [sessionId]);
       return true;
     },
     createCategory: async (_: any, { name, image_url }: any, context: any) => {

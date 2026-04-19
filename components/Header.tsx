@@ -16,18 +16,21 @@ interface HeaderProps {
     wishlistCount?: number;
     onCartClick?: () => void;
     categories?: any[];
+    forceBlack?: boolean;
 }
 
-export default function Header({ 
-    isScrolled: propIsScrolled, 
-    cartCount = 0, 
-    wishlistCount = 0, 
+export default function Header({
+    isScrolled: propIsScrolled,
+    cartCount = 0,
+    wishlistCount = 0,
     onCartClick,
-    categories = []
+    categories = [],
+    forceBlack = false
 }: HeaderProps) {
     const { data: session } = useSession();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [forceOpenSearch, setForceOpenSearch] = useState(false);
     const [localIsScrolled, setLocalIsScrolled] = useState(false);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
@@ -40,6 +43,7 @@ export default function Header({
     }, []);
 
     const isScrolled = propIsScrolled ?? localIsScrolled;
+    const currentLogo = (isScrolled || isSearchOpen || forceBlack) ? "/logo1.png" : "/logowhite.png";
 
     const handleIsSearchOpen = (val: boolean) => {
         setIsSearchOpen(val);
@@ -47,14 +51,14 @@ export default function Header({
     };
 
     const toggleCategory = (catId: string) => {
-        setExpandedCategories(prev => 
+        setExpandedCategories(prev =>
             prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]
         );
     };
 
     return (
         <>
-            <header className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""}`}>
+            <header className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""} ${forceBlack ? styles.forceBlack : ""}`}>
                 <div className={styles.headerLayout}>
                     <div className={styles.headerLeft}>
                         <button className={styles.menuButton} onClick={() => setIsMenuOpen(true)}>
@@ -65,7 +69,7 @@ export default function Header({
                         <div className={`${styles.logo} ${styles.hideOnMobile}`}>
                             <Link href="/">
                                 <Image
-                                    src="/logo1.png"
+                                    src={currentLogo}
                                     alt="SEAURA Logo"
                                     width={80}
                                     height={40}
@@ -79,7 +83,7 @@ export default function Header({
                     <div className={`${styles.headerLogo} ${styles.showOnMobileOnly}`}>
                         <Link href="/">
                             <Image
-                                src="/logo1.png"
+                                src={currentLogo}
                                 alt="SEAURA Logo"
                                 width={80}
                                 height={40}
@@ -90,7 +94,7 @@ export default function Header({
                     </div>
 
                     <div className={`${styles.headerCenter} ${isSearchOpen ? styles.searchActive : ""}`}>
-                        <Search isScrolled={isScrolled} onOpenChange={handleIsSearchOpen} />
+                        <Search isScrolled={isScrolled || forceBlack} onOpenChange={handleIsSearchOpen} forceOpen={forceOpenSearch} />
                     </div>
 
                     <div className={styles.headerRight}>
@@ -98,7 +102,7 @@ export default function Header({
                             <Heart size={22} className={wishlistCount > 0 ? "text-pink-500 fill-pink-500" : ""} />
                             {wishlistCount > 0 && <span className={styles.badge}>{wishlistCount}</span>}
                         </Link>
-                        
+
                         <button className={`${styles.iconButton} ${styles.hideOnMobile}`} onClick={onCartClick}>
                             <ShoppingBag size={22} />
                             {cartCount > 0 && <span className={styles.badge}>{cartCount}</span>}
@@ -119,18 +123,20 @@ export default function Header({
             >
                 <div className={styles.menuDrawer} onClick={(e) => e.stopPropagation()}>
                     <button className={styles.closeButton} onClick={() => setIsMenuOpen(false)}>
-                        <CloseIcon size={24} />
+                        <CloseIcon size={20} />
                     </button>
 
-                    <div className={styles.menuBrand}>
-                        <Link href="/" onClick={() => setIsMenuOpen(false)}>
-                            <Image src="/logo1.png" alt="SEAURA Logo" width={120} height={30} className={styles.menuBrandImg} />
-                        </Link>
+                    <div
+                        className={styles.menuSearch}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => { setIsMenuOpen(false); setForceOpenSearch(true); setTimeout(() => setForceOpenSearch(false), 300); }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+                        <span className={styles.menuSearchInput} style={{ color: '#999', userSelect: 'none' }}>RECHERCHE</span>
                     </div>
 
                     <nav className={styles.menuNav}>
                         <ul>
-                            <li><Link href="/shop" onClick={() => setIsMenuOpen(false)}>NEW IN</Link></li>
                             {categories.filter(c => c.id !== 'ALL').map((cat) => {
                                 const hasSubs = cat.sub_categories && cat.sub_categories.length > 0;
                                 const isExpanded = expandedCategories.includes(cat.id);
@@ -143,23 +149,23 @@ export default function Header({
                                                 onClick={() => setIsMenuOpen(false)}
                                                 className={styles.catLink}
                                             >
-                                                {cat.name.toUpperCase()}
+                                                {cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase()}
                                             </Link>
                                             {hasSubs && (
-                                                <button 
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); toggleCategory(cat.id); }}
                                                     className={styles.expandBtn}
                                                 >
-                                                    {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                                                 </button>
                                             )}
                                         </div>
-                                        
+
                                         {hasSubs && isExpanded && (
                                             <ul className={styles.subMenu}>
                                                 {cat.sub_categories.map((sub: any) => (
                                                     <li key={sub.id}>
-                                                        <Link 
+                                                        <Link
                                                             href={`/shop?category=${cat.id}&sub_category=${sub.id}`}
                                                             onClick={() => setIsMenuOpen(false)}
                                                         >
@@ -174,6 +180,8 @@ export default function Header({
                             })}
                         </ul>
                     </nav>
+
+
                 </div>
                 <div className={styles.menuBackdrop} onClick={() => setIsMenuOpen(false)}></div>
             </div>

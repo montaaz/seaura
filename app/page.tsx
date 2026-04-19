@@ -41,8 +41,6 @@ const HeroSection = React.memo(({ cmsContent, heroImages, currentHeroIndex }: an
         );
       })}
       <div className={styles.heroOverlay}>
-        <h1 className={styles.heroTitle}>{cmsContent.hero_title || "NEW IN"}</h1>
-        <a href="#" className={styles.heroLink}>{cmsContent.hero_link_text || "Plus d'informations"}</a>
       </div>
     </div>
   </section>
@@ -75,15 +73,11 @@ const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) =
                     sizes="(max-width: 768px) 100vw, 25vw"
                   />
                 )}
+                {product.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
               </div>
               <h3 className={styles.productName}>{product.name}</h3>
-              <div className={styles.productStars}>
-                <div className={styles.starsOnly}>
-                  <Star /><Star /><Star /><Star /><Star />
-                </div>
-                <span className={styles.productReviews}>({reviews[idx % 4] || 0})</span>
-              </div>
-              <p className={styles.productPrice}>from {parseFloat(product.price).toFixed(2)} €</p>
+
+              <p className={styles.productPrice}>{parseFloat(product.price).toFixed(0)}</p>
             </Link>
           ))}
         </div>
@@ -110,11 +104,7 @@ const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) =
           </svg>
         </button>
       </div>
-      <div className={styles.viewAllContainer}>
-        <Link href="/shop" className={styles.viewAllLink}>
-          SHOP ALL JEWELRY
-        </Link>
-      </div>
+
     </section>
   );
 });
@@ -124,18 +114,16 @@ const CategoriesSection = React.memo(({ categories }: { categories: any[] }) => 
   <section className={styles.categoryGrid}>
     {categories.filter(c => c.id !== "ALL").slice(0, 4).map((cat: any) => (
       <Link key={cat.id} href={`/shop?category=${cat.id}`} className={styles.categoryCard}>
-        <Image 
-          src={cat.image_url || "/images/bags.png"} 
-          alt={cat.name} 
-          fill 
-          sizes="(max-width: 768px) 100vw, 50vw" 
-          className={styles.catImg} 
-          loading="lazy" 
+        <Image
+          src={cat.image_url || "/images/bags.png"}
+          alt={cat.name}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className={styles.catImg}
+          loading="lazy"
         />
         <div className={styles.cardContent}>
-          <h2 className={styles.hollowTitle}>{cat.name}</h2>
           <h3 className={styles.solidTitle}>{cat.name}</h3>
-          <span className={styles.cardLink}>Plus d&apos;informations</span>
         </div>
       </Link>
     ))}
@@ -407,7 +395,7 @@ export default function Home() {
         query: `query { 
           homeContent { key value } 
           categories { id name image_url sub_categories { id name } } 
-          products(limit: 4) { id name price image_url }
+          products(limit: 8) { id name price image_url images stock }
         }`
       })
     })
@@ -528,7 +516,7 @@ export default function Home() {
   return (
     <main className={styles.main}>
       {/* Shared Header Component */}
-      <Header 
+      <Header
         categories={categories}
         onCartClick={() => setIsChatOpen(true)} // Note: on home page, maybe they want cart or chat? Home page didn't have a cart drawer yet.
       />

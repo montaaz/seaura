@@ -1994,6 +1994,21 @@ function OrderManager() {
         } catch (err) { console.error(err); }
     };
 
+    const handleDeleteActiveCart = async (sessionId: string) => {
+        if (!confirm("Supprimer ce panier actif ?")) return;
+        try {
+            await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: 'mutation($sessionId: String!) { deleteCart(sessionId: $sessionId) }',
+                    variables: { sessionId }
+                })
+            });
+            fetchData();
+        } catch (err) { console.error(err); }
+    };
+
     if (loading) return <div className="flex h-full items-center justify-center font-black tracking-[0.5em] text-black/5 animate-pulse uppercase">Chargement en temps réel...</div>;
 
     return (
@@ -2030,8 +2045,15 @@ function OrderManager() {
                             }, 0);
                             
                             return (
-                                <div key={cart.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-xl group hover:-translate-y-2 transition-all duration-500">
-                                    <div className="flex justify-between items-start mb-6">
+                                <div key={cart.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-xl group hover:-translate-y-2 transition-all duration-500 relative">
+                                    <button 
+                                        onClick={() => handleDeleteActiveCart(cart.session_id)}
+                                        className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all z-10"
+                                        title="Supprimer la session"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                    <div className="flex justify-between items-start mb-6 pr-10">
                                         <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full">Session: {String(cart.session_id || '').substring(0, 8) || 'Anon'}</div>
                                         <div className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">
                                             {cart.updated_at ? new Date(cart.updated_at).toLocaleTimeString() : 'Recent'}
