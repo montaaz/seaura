@@ -888,6 +888,26 @@ function CMSManager() {
             .then(async data => {
                 const results = data.data?.homeContent || [];
 
+                const hasAnnouncement = results.some((i: any) => i.key === 'announcement_bar_text');
+                if (!hasAnnouncement) {
+                    await fetch('/api/graphql', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            query: `mutation($key: String!, $value: String!, $type: String!, $section: String) { 
+                                updateHomeContent(key: $key, value: $value, type: $type, section: $section) { key }
+                            }`,
+                            variables: {
+                                key: 'announcement_bar_text',
+                                value: 'Welcome to SEAURA Studio - Discover our new collection',
+                                type: 'TEXT',
+                                section: 'branding'
+                            }
+                        })
+                    });
+                    return fetchCMS();
+                }
+
                 const hasInsta = results.some((i: any) => i.section === 'instagram');
                 if (!hasInsta) {
                     console.log("Initializing Instagram CMS slots...");

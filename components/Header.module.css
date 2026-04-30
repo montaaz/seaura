@@ -137,6 +137,10 @@
     padding: 15px 20px;
   }
 
+  .headerScrolled {
+    background: #ffffff !important;
+  }
+
   .headerLayout {
     flex-wrap: wrap;
   }

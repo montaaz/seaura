@@ -17,6 +17,7 @@ interface HeaderProps {
     onCartClick?: () => void;
     categories?: any[];
     forceBlack?: boolean;
+    style?: React.CSSProperties;
 }
 
 export default function Header({
@@ -25,7 +26,8 @@ export default function Header({
     wishlistCount = 0,
     onCartClick,
     categories = [],
-    forceBlack = false
+    forceBlack = false,
+    style
 }: HeaderProps) {
     const { data: session } = useSession();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -58,7 +60,10 @@ export default function Header({
 
     return (
         <>
-            <header className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""} ${forceBlack ? styles.forceBlack : ""}`}>
+            <header 
+                className={`${styles.header} ${isScrolled || isSearchOpen ? styles.headerScrolled : ""} ${forceBlack ? styles.forceBlack : ""}`}
+                style={style}
+            >
                 <div className={styles.headerLayout}>
                     <div className={styles.headerLeft}>
                         <button className={styles.menuButton} onClick={() => setIsMenuOpen(true)}>

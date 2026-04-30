@@ -301,12 +301,9 @@ function ShopDetail() {
                     )}
                 </div>
                 <div className={styles.productDetails}>
-                    <span className={styles.detailCategory}>BOUTIQUE / ARTISAN MASTERPIECE</span>
                     <h2 className={styles.detailTitle}>{product.name}</h2>
                     <div className={styles.detailPrice}>{product.price} €</div>
-                    <p className={styles.priceDescription}>{product.description || "An artisan masterpiece blending timeless elegance with exceptional Tunisian materials."}</p>
                     <div className={styles.optionSection}>
-                        <span className={styles.optionLabel}>Size Selection</span>
                         <div className={styles.optionGrid}>
                             {(product.sizes?.length > 0 ? product.sizes : ["S", "M", "L", "XL"]).map((size: string) => (
                                 <button key={size} className={`${styles.optionBtn} ${selectedSize === size ? styles.optionBtnActive : ""}`} onClick={() => setSelectedSize(size)}>{size}</button>
@@ -314,30 +311,52 @@ function ShopDetail() {
                         </div>
                     </div>
                     <div className={styles.optionSection}>
-                        <span className={styles.optionLabel}>Color Palette</span>
-                        <div className={styles.colorGrid}>
+                        <div className={styles.colorGrid} style={{ justifyContent: 'center' }}>
                             {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
                                 <button key={color.name} className={`${styles.colorBtn} ${selectedColorName === color.name ? styles.colorBtnActive : ""}`} style={{ backgroundColor: color.hex }} onClick={() => setSelectedColorName(color.name)} aria-label={color.name} />
                             ))}
+                        </div>
+                        <div className="text-center mt-4">
                             <span className={styles.colorIndicator}>{selectedColorName} Edition</span>
                         </div>
                     </div>
                     <div className={styles.actionRow}>
-                        <div className={styles.qtySelector}>
-                            <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
-                            <span className="font-bold text-lg">{count}</span>
-                            <button className={styles.qtyBtn} onClick={() => setCount(count + 1)}>+</button>
-                        </div>
-                        <div className="flex gap-4 w-full">
-                            <button className={styles.buyBtn} onClick={() => addToCart(product)}>Add to Card</button>
-                            <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
-                                <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
-                            </button>
-                        </div>
+                        {product.stock > 0 ? (
+                            <>
+                                <div className={styles.qtySelector}>
+                                    <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
+                                    <span className="text-sm font-light">{count}</span>
+                                    <button className={styles.qtyBtn} onClick={() => setCount(count + 1)}>+</button>
+                                </div>
+                                <div className="flex gap-4 w-full">
+                                    <button className={styles.buyBtn} onClick={() => addToCart(product)}>Add to Card</button>
+                                    <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
+                                        <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-full">
+                                <div className={styles.soldOutBox}>SOLD OUT</div>
+                                <button className={styles.notifyBtn}>NOTIFY ME WHEN AVAILABLE</button>
+                            </div>
+                        )}
                     </div>
+
                     <ul className={styles.featureList}>
-                        <li className={styles.featureItem}><Plus size={14} /> 100% Organic Mediterranean Cotton</li>
-                        <li className={styles.featureItem}><Plus size={14} /> Hand-finished details by local artisans</li>
+                        <div className={styles.exclusiveBranding} style={{ marginTop: '-20px', marginBottom: '40px' }}>
+                            DESCRIPTION
+                        </div>
+                        {product.description ? (
+                            product.description.split('\n').filter((line: string) => line.trim() !== "").map((line: string, idx: number) => (
+                                <li key={idx} className={styles.featureItem}><Plus size={14} /> {line.trim()}</li>
+                            ))
+                        ) : (
+                            <>
+                                <li className={styles.featureItem}><Plus size={14} /> 100% Organic Mediterranean Cotton</li>
+                                <li className={styles.featureItem}><Plus size={14} /> Hand-finished details by local artisans</li>
+                            </>
+                        )}
                     </ul>
                 </div>
             </section>
@@ -348,7 +367,6 @@ function ShopDetail() {
                 <section className={styles.relatedSection}>
                     <div className={styles.sectionTitleBlock}>
                         <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
-                        <h2 className={styles.sectionTitle}>Continue Exploring</h2>
                     </div>
                     <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
                         {historyItems.map((p: any) => (

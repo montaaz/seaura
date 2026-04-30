@@ -14,6 +14,7 @@ const LoadingScreen = dynamic(() => import('@/components/LoadingScreen'), { ssr:
 const Header = dynamic(() => import('@/components/Header'), { ssr: false });
 const Footer = dynamic(() => import('@/components/Footer'), { ssr: false });
 const Search = dynamic(() => import('@/components/Search'), { ssr: false });
+const AnnouncementBar = dynamic(() => import('@/components/AnnouncementBar'), { ssr: false });
 
 const Star = () => (
   <svg className={styles.starIcon} viewBox="0 0 24 24">
@@ -515,10 +516,12 @@ export default function Home() {
 
   return (
     <main className={styles.main}>
+      <AnnouncementBar text={cmsContent.announcement_bar_text} />
       {/* Shared Header Component */}
       <Header
         categories={categories}
         onCartClick={() => setIsChatOpen(true)} // Note: on home page, maybe they want cart or chat? Home page didn't have a cart drawer yet.
+        style={{ top: cmsContent.announcement_bar_text ? '40px' : '0' }}
       />
 
       {/* Hero Section */}
