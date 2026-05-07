@@ -342,7 +342,7 @@ function ProductManager() {
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [] as { name: string, hex: string }[], images: [] as string[], sizes: [] as string[] });
+    const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [] as { name: string, hex: string }[], images: [] as string[], sizes: [] as string[], has_sizes: true });
     const [customColor, setCustomColor] = useState({ name: "", hex: "#000000" });
     const [customSize, setCustomSize] = useState("");
 
@@ -352,7 +352,7 @@ function ProductManager() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: '{ products { id name price image_url images description category_id colors { name hex } sizes stock } categories { id name } }'
+                query: '{ products { id name price image_url images description category_id colors { name hex } sizes has_sizes stock } categories { id name } }'
             })
         });
         const data = await res.json();
@@ -409,11 +409,11 @@ function ProductManager() {
             }
 
             const mutation = isEditing 
-                ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
-                    updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
+                ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
+                    updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
                 }`
-                : `mutation($name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!]) {
-                    createProduct(name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes) { id }
+                : `mutation($name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
+                    createProduct(name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
                 }`;
 
             const res = await fetch('/api/graphql', {
@@ -431,7 +431,8 @@ function ProductManager() {
                         category_id: newProduct.category_id || null,
                         colors: finalColors,
                         images: newProduct.images,
-                        sizes: newProduct.sizes
+                        sizes: newProduct.sizes,
+                        has_sizes: newProduct.has_sizes
                     }
                 })
             });
@@ -441,7 +442,7 @@ function ProductManager() {
             } else {
                 setIsAdding(false);
                 setEditingId(null);
-                setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
                 fetchData();
             }
         } catch (err) {
@@ -462,7 +463,7 @@ function ProductManager() {
                     <button
                         onClick={() => {
                             setEditingId(null);
-                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
                             setIsAdding(true);
                         }}
                         className="bg-black text-white px-8 py-3 rounded-full text-sm font-medium hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2"
@@ -558,7 +559,8 @@ function ProductManager() {
                                                         category_id: p.category_id || "",
                                                         colors: p.colors || [],
                                                         images: fullImages,
-                                                        sizes: p.sizes || []
+                                                        sizes: p.sizes || [],
+                                                        has_sizes: p.has_sizes !== undefined ? p.has_sizes : true
                                                     });
                                                     setIsAdding(true);
                                                 }}
@@ -604,7 +606,7 @@ function ProductManager() {
                     onClick={() => {
                         setIsAdding(false);
                         setEditingId(null);
-                        setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                        setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
                     }}
                 >
                     <div
@@ -709,74 +711,90 @@ function ProductManager() {
                                             </div>
                                         ))}
                                     </div>
+                                </div>
 
-                                    <div className="space-y-4">
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
                                         <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Tailles et Options Disponibles</label>
-
-                                        <div className="flex flex-col gap-4 p-4 md:p-6 bg-gray-50 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-inner">
-                                            <div className="flex flex-wrap gap-2">
-                                                {/* Presets Clothing */}
-                                                {["XS", "S", "M", "L", "XL", "XXL"].map(s => (
-                                                    <button
-                                                        key={s} type="button"
-                                                        onClick={() => setNewProduct(prev => ({ ...prev, sizes: prev.sizes.includes(s) ? prev.sizes.filter(x => x !== s) : [...prev.sizes, s] }))}
-                                                        className={`px-3 py-1 rounded-lg border text-[9px] font-bold transition-all ${newProduct.sizes.includes(s) ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'}`}
-                                                    >
-                                                        {s}
-                                                    </button>
-                                                ))}
-                                                <div className="w-[1px] h-4 bg-gray-200 self-center mx-1" />
-                                                {/* Presets Screens */}
-                                                {['16"', '24"', '32"', '43"', '55"'].map(s => (
-                                                    <button
-                                                        key={s} type="button"
-                                                        onClick={() => setNewProduct(prev => ({ ...prev, sizes: prev.sizes.includes(s) ? prev.sizes.filter(x => x !== s) : [...prev.sizes, s] }))}
-                                                        className={`px-3 py-1 rounded-lg border text-[9px] font-bold transition-all ${newProduct.sizes.includes(s) ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'}`}
-                                                    >
-                                                        {s}
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            <div className="flex gap-2">
-                                                <input
-                                                    placeholder="Ajouter une taille personnalisée..."
-                                                    className="flex-1 h-10 bg-white border border-gray-100 rounded-xl px-4 text-xs font-medium outline-none focus:border-black transition-all"
-                                                    value={customSize}
-                                                    onChange={e => setCustomSize(e.target.value)}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (customSize) {
-                                                            if (!newProduct.sizes.includes(customSize)) {
-                                                                setNewProduct({ ...newProduct, sizes: [...newProduct.sizes, customSize] });
-                                                            }
-                                                            setCustomSize("");
-                                                        }
-                                                    }}
-                                                    className="h-10 bg-black text-white px-5 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-2 pt-1">
-                                            {newProduct.sizes.map((size, idx) => (
-                                                <div key={idx} className="flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-gray-100 shadow-sm animate-in fade-in zoom-in duration-300">
-                                                    <span className="text-[9px] font-bold uppercase tracking-tight text-black">{size}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setNewProduct({ ...newProduct, sizes: newProduct.sizes.filter((_, i) => i !== idx) })}
-                                                        className="w-4 h-4 rounded-full hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors flex items-center justify-center font-bold"
-                                                    >
-                                                        ×
-                                                    </button>
-                                                </div>
-                                            ))}
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{newProduct.has_sizes ? 'Activées' : 'Désactivées'}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewProduct({ ...newProduct, has_sizes: !newProduct.has_sizes })}
+                                                className={`w-12 h-6 rounded-full transition-all relative ${newProduct.has_sizes ? 'bg-black' : 'bg-gray-200'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${newProduct.has_sizes ? 'left-7' : 'left-1'}`} />
+                                            </button>
                                         </div>
                                     </div>
+
+                                    {newProduct.has_sizes && (
+                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                                            <div className="flex flex-col gap-4 p-4 md:p-6 bg-gray-50 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-inner">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {/* Presets Clothing */}
+                                                    {["XS", "S", "M", "L", "XL", "XXL"].map(s => (
+                                                        <button
+                                                            key={s} type="button"
+                                                            onClick={() => setNewProduct(prev => ({ ...prev, sizes: prev.sizes.includes(s) ? prev.sizes.filter(x => x !== s) : [...prev.sizes, s] }))}
+                                                            className={`px-3 py-1 rounded-lg border text-[9px] font-bold transition-all ${newProduct.sizes.includes(s) ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'}`}
+                                                        >
+                                                            {s}
+                                                        </button>
+                                                    ))}
+                                                    <div className="w-[1px] h-4 bg-gray-200 self-center mx-1" />
+                                                    {/* Presets Screens */}
+                                                    {['16"', '24"', '32"', '43"', '55"'].map(s => (
+                                                        <button
+                                                            key={s} type="button"
+                                                            onClick={() => setNewProduct(prev => ({ ...prev, sizes: prev.sizes.includes(s) ? prev.sizes.filter(x => x !== s) : [...prev.sizes, s] }))}
+                                                            className={`px-3 py-1 rounded-lg border text-[9px] font-bold transition-all ${newProduct.sizes.includes(s) ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'}`}
+                                                        >
+                                                            {s}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        placeholder="Ajouter une taille personnalisée..."
+                                                        className="flex-1 h-10 bg-white border border-gray-100 rounded-xl px-4 text-xs font-medium outline-none focus:border-black transition-all"
+                                                        value={customSize}
+                                                        onChange={e => setCustomSize(e.target.value)}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (customSize) {
+                                                                if (!newProduct.sizes.includes(customSize)) {
+                                                                    setNewProduct({ ...newProduct, sizes: [...newProduct.sizes, customSize] });
+                                                                }
+                                                                setCustomSize("");
+                                                            }
+                                                        }}
+                                                        className="h-10 bg-black text-white px-5 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2 pt-1">
+                                                {newProduct.sizes.map((size, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-gray-100 shadow-sm animate-in fade-in zoom-in duration-300">
+                                                        <span className="text-[9px] font-bold uppercase tracking-tight text-black">{size}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setNewProduct({ ...newProduct, sizes: newProduct.sizes.filter((_, i) => i !== idx) })}
+                                                            className="w-4 h-4 rounded-full hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors flex items-center justify-center font-bold"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-4">
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Images du Produit</label>
@@ -846,7 +864,7 @@ function ProductManager() {
                                         onClick={() => {
                                             setIsAdding(false);
                                             setEditingId(null);
-                                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [] });
+                                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
                                         }}
                                         className="flex-1 h-14 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-all active:scale-95 text-gray-400"
                                     >

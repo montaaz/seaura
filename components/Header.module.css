@@ -421,3 +421,51 @@
 .subMenu li a:hover {
   color: #000 !important;
 }
+
+.mobileSidebarTitle {
+  display: none;
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: #999;
+  margin-top: 60px;
+  margin-bottom: 25px;
+  padding-top: 30px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+  .mobileSidebarTitle {
+    display: block;
+  }
+}
+
+.mobileSidebarLink {
+  display: none;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .mobileSidebarLink {
+    display: block;
+  }
+}
+
+.mobileSidebarLink a, 
+.mobileSidebarLink button {
+  display: block;
+  font-family: 'Raleway', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  transition: all 0.3s ease;
+}
+
+.mobileSidebarLink a:hover,
+.mobileSidebarLink button:hover {
+  color: #a1927c;
+}

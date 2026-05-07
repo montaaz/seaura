@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, Fragment } from "react";
 import styles from "./shop.module.css";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MessageCircle, Send, X as CloseIcon, User as UserIcon, ArrowUp, Instagram, ShoppingBag, Heart, Plus, Trash2, ChevronRight, ChevronLeft, ChevronDown, Bookmark } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -25,6 +25,7 @@ export default function ShopListingPage() {
 }
 
 function ShopListing() {
+    const router = useRouter();
     const { data: session } = useSession();
     const { userEmail, setUserEmail, setIsEmailModalOpen } = useUser();
     const [products, setProducts] = useState<any[]>([]);
@@ -150,6 +151,11 @@ function ShopListing() {
 
     const removeFromCart = (index: number) => {
         setCart(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleCheckout = () => {
+        if (cart.length === 0) return;
+        router.push('/checkout');
     };
 
     const [isScrolled, setIsScrolled] = useState(false);
@@ -360,7 +366,7 @@ function ShopListing() {
                         </div>
                     ))}
                 </div>
-                {cart.length > 0 && <div className={styles.cartFooter}><button className={styles.checkoutBtn}>Finalize Collection</button></div>}
+                {cart.length > 0 && <div className={styles.cartFooter}><button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button></div>}
             </div>
         </div>
     );

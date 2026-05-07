@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, Fragment } from "react";
 import styles from "../shop.module.css";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MessageCircle, Send, X as CloseIcon, User as UserIcon, ArrowUp, Instagram, ShoppingBag, Heart, Plus, Trash2, ChevronRight, ChevronLeft } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -24,6 +24,7 @@ export default function ShopProductPage() {
 }
 
 function ShopDetail() {
+    const router = useRouter();
     const { id: productId } = useParams();
     const { data: session } = useSession();
     const { userEmail, setUserEmail, setIsEmailModalOpen } = useUser();
@@ -63,7 +64,7 @@ function ShopDetail() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes has_sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -113,7 +114,6 @@ function ShopDetail() {
             const pid = String(product.id);
             const saved = localStorage.getItem('seaura_viewed');
             let viewed = saved ? JSON.parse(saved) : [];
-            // Remove if already exists and move to front
             viewed = viewed.filter((id: any) => String(id) !== pid);
             viewed.unshift(pid);
             localStorage.setItem('seaura_viewed', JSON.stringify(viewed.slice(0, 10)));
@@ -164,7 +164,7 @@ function ShopDetail() {
         if (!userEmail) { setIsEmailModalOpen(true); return; }
         setCart(prev => [...prev, {
             ...product,
-            selectedSize: selectedSize,
+            selectedSize: product.has_sizes !== false ? selectedSize : "Standard",
             selectedColor: selectedColorName
         }]);
         setIsCartOpen(true);
@@ -174,51 +174,9 @@ function ShopDetail() {
         setCart(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleCheckout = async () => {
+    const handleCheckout = () => {
         if (cart.length === 0) return;
-        const { value: formValues } = await Swal.fire({
-            title: 'Finalize Collection',
-            html: `
-                <div style="text-align: left; padding: 0 10px">
-                    <label style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #999">Email Address</label>
-                    <input id="swal-email" class="swal2-input" placeholder="Email" style="width: 100%; border-radius: 15px; border: 1px solid #eee; height: 50px; font-size: 14px">
-                    <label style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #999; margin-top: 15px; display: block">Phone Number</label>
-                    <input id="swal-phone" class="swal2-input" placeholder="Phone" style="width: 100%; border-radius: 15px; border: 1px solid #eee; height: 50px; font-size: 14px">
-                </div>
-            `,
-            focusConfirm: false,
-            confirmButtonText: 'ORDER NOW',
-            confirmButtonColor: '#000',
-            showCancelButton: true,
-            cancelButtonText: 'CANCEL',
-            preConfirm: () => {
-                const email = (document.getElementById('swal-email') as HTMLInputElement).value;
-                const phone = (document.getElementById('swal-phone') as HTMLInputElement).value;
-                if (!email || !phone) { Swal.showValidationMessage('Please enter both Email and Phone Number'); }
-                return { email, phone };
-            }
-        });
-        if (!formValues) return;
-        try {
-            const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
-            const items = cart.map(item => ({ id: item.id, name: item.name, price: parseFloat(item.price), selectedSize: item.selectedSize, selectedColor: item.selectedColor, quantity: 1 }));
-            const res = await fetch('/api/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: `mutation($total: Float!, $items: [OrderItemInput!]!, $email: String, $phone: String) {
-                        createOrder(total: $total, items: $items, email: $email, phone: $phone) { id }
-                    }`,
-                    variables: { total, items, email: formValues.email, phone: formValues.phone }
-                })
-            });
-            const data = await res.json();
-            if (data.data?.createOrder) {
-                Swal.fire({ icon: 'success', title: 'Collection Finalisée !', text: 'Votre commande est enregistrée avec succès.', confirmButtonColor: '#000' });
-                setCart([]);
-                setIsCartOpen(false);
-            }
-        } catch (err) { }
+        router.push('/checkout');
     };
 
     const [count, setCount] = useState(1);
@@ -229,6 +187,33 @@ function ShopDetail() {
     const [selectedColorName, setSelectedColorName] = useState("Noir");
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
     const [historyItems, setHistoryItems] = useState<any[]>([]);
+
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        setTouchStart(e.targetTouches[0].clientY);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (touchStart === null) return;
+        const currentTouch = e.targetTouches[0].clientY;
+        const diff = touchStart - currentTouch;
+
+        if (diff > 50) {
+            setIsExpanded(true);
+        } else if (diff < -50) {
+            setIsExpanded(false);
+        }
+    };
+
+    const handleImageScroll = (e: any) => {
+        const scrollLeft = e.target.scrollLeft;
+        const width = e.target.offsetWidth;
+        const index = Math.round(scrollLeft / width);
+        setActiveImageIndex(index);
+    };
 
     useEffect(() => {
         if (products.length > 0) {
@@ -242,6 +227,36 @@ function ShopDetail() {
             setHistoryItems(viewed);
         }
     }, [products, productId]);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    const index = parseInt(id.split('-')[1]);
+                    if (!isNaN(index)) setActiveImageIndex(index);
+                }
+            });
+        }, { threshold: 0.5 });
+
+        const items = document.querySelectorAll(`.${styles.verticalImageItem}`);
+        items.forEach(item => observer.observe(item));
+        return () => observer.disconnect();
+    }, [product, styles.verticalImageItem]);
+
+    useEffect(() => {
+        if (product) {
+            if (product.has_sizes !== false && product.sizes?.length > 0) {
+                setSelectedSize(product.sizes[0]);
+            } else {
+                setSelectedSize("Standard");
+            }
+
+            if (product.colors?.length > 0) {
+                setSelectedColorName(product.colors[0].name);
+            }
+        }
+    }, [product]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -284,152 +299,237 @@ function ShopDetail() {
             />
 
             {/* PRODUCT DETAIL SECTION */}
-            <section className={styles.featuredProduct} style={{ marginTop: '120px' }}>
+            <section className={styles.featuredProduct} style={{ marginTop: '0px' }}>
                 <div className={styles.productDisplay}>
-                    <div className={styles.mainImageWrapper}>
-                        <Image src={(product.images && product.images.length > 0) ? product.images[selectedImageIndex] : (product.image_url || "/images/clothing.png")} alt={product.name} width={1200} height={1500} className={styles.featuredImg} priority quality={85} />
-                        {product.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
-                    </div>
-                    {product.images && product.images.length > 1 && (
-                        <div className={styles.thumbnailGallery}>
-                            {product.images.map((img: string, idx: number) => (
-                                <div key={idx} className={`${styles.thumbnail} ${selectedImageIndex === idx ? styles.thumbnailActive : ""}`} onClick={() => setSelectedImageIndex(idx)}>
-                                    <Image src={img} alt={`Thumbnail ${idx}`} fill className="object-cover" />
+                    <div className={styles.imageVerticalStack}>
+                        {product.images && product.images.length > 0 ? (
+                            product.images.map((img: string, idx: number) => (
+                                <div key={idx} id={`img-${idx}`} className={styles.verticalImageItem}>
+                                    <Image
+                                        src={img}
+                                        alt={`${product.name} ${idx}`}
+                                        width={1200}
+                                        height={1500}
+                                        className={styles.gridImg}
+                                        priority={idx < 1}
+                                        quality={95}
+                                    />
+                                    {idx === 0 && product.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
                                 </div>
+                            ))
+                        ) : (
+                            <div className={styles.verticalImageItem}>
+                                <Image src={product.image_url || "/images/clothing.png"} alt={product.name} width={1200} height={1500} className={styles.gridImg} priority />
+                                {product.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
+                            </div>
+                        )}
+                    </div>
+                    {/* Vertical Pagination Dots (Mobile) */}
+                    {product.images && product.images.length > 1 && (
+                        <div className={styles.verticalPagination}>
+                            {product.images.map((_: any, i: number) => (
+                                <div
+                                    key={i}
+                                    className={`${styles.vDot} ${activeImageIndex === i ? styles.vDotActive : ""}`}
+                                    onClick={() => document.getElementById(`img-${i}`)?.scrollIntoView({ behavior: 'smooth' })}
+                                />
                             ))}
                         </div>
                     )}
                 </div>
-                <div className={styles.productDetails}>
-                    <h2 className={styles.detailTitle}>{product.name}</h2>
-                    <div className={styles.detailPrice}>{product.price} €</div>
-                    <div className={styles.optionSection}>
-                        <div className={styles.optionGrid}>
-                            {(product.sizes?.length > 0 ? product.sizes : ["S", "M", "L", "XL"]).map((size: string) => (
-                                <button key={size} className={`${styles.optionBtn} ${selectedSize === size ? styles.optionBtnActive : ""}`} onClick={() => setSelectedSize(size)}>{size}</button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className={styles.optionSection}>
-                        <div className={styles.colorGrid} style={{ justifyContent: 'center' }}>
-                            {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
-                                <button key={color.name} className={`${styles.colorBtn} ${selectedColorName === color.name ? styles.colorBtnActive : ""}`} style={{ backgroundColor: color.hex }} onClick={() => setSelectedColorName(color.name)} aria-label={color.name} />
-                            ))}
-                        </div>
-                        <div className="text-center mt-4">
-                            <span className={styles.colorIndicator}>{selectedColorName} Edition</span>
-                        </div>
-                    </div>
-                    <div className={styles.actionRow}>
-                        {product.stock > 0 ? (
-                            <>
-                                <div className={styles.qtySelector}>
-                                    <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
-                                    <span className="text-sm font-light">{count}</span>
-                                    <button className={styles.qtyBtn} onClick={() => setCount(count + 1)}>+</button>
-                                </div>
-                                <div className="flex gap-4 w-full">
-                                    <button className={styles.buyBtn} onClick={() => addToCart(product)}>Add to Card</button>
-                                    <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
-                                        <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="w-full">
-                                <div className={styles.soldOutBox}>SOLD OUT</div>
-                                <button className={styles.notifyBtn}>NOTIFY ME WHEN AVAILABLE</button>
-                            </div>
-                        )}
+                <div
+                    className={`${styles.productDetails} ${isExpanded ? styles.detailsExpanded : ""}`}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                >
+                    {/* Mobile Expansion Handle */}
+                    <div className={styles.mobileHandle} onClick={() => setIsExpanded(!isExpanded)}>
+                        <div className={styles.handleLine} />
                     </div>
 
-                    <ul className={styles.featureList}>
-                        <div className={styles.exclusiveBranding} style={{ marginTop: '-20px', marginBottom: '40px' }}>
-                            DESCRIPTION
+                    <div className={styles.mobileSummaryBar}>
+                        <div className="flex justify-between items-center w-full px-6 py-4">
+                            <div>
+                                <h2 className={styles.detailTitle}>{product.name}</h2>
+                                <div className={styles.detailPrice}>{product.price} €</div>
+                            </div>
+                            <div>
+                                <button className={styles.mobileAddBtn} onClick={() => addToCart(product)}>ADD +</button>
+                            </div>
                         </div>
-                        {product.description ? (
-                            product.description.split('\n').filter((line: string) => line.trim() !== "").map((line: string, idx: number) => (
-                                <li key={idx} className={styles.featureItem}><Plus size={14} /> {line.trim()}</li>
-                            ))
-                        ) : (
-                            <>
-                                <li className={styles.featureItem}><Plus size={14} /> 100% Organic Mediterranean Cotton</li>
-                                <li className={styles.featureItem}><Plus size={14} /> Hand-finished details by local artisans</li>
-                            </>
+                    </div>
+
+                    <div className={styles.detailsMainContent} style={{ paddingTop: '0' }}>
+                        <h2 className={styles.detailTitle} style={{ marginTop: '0' }}>{product.name}</h2>
+                        <div className={styles.detailPrice}>{product.price} €</div>
+
+                        <div className={`${styles.collapsibleContent} ${isExpanded ? styles.contentVisible : ""}`}>
+                            {product.has_sizes !== false && (
+                                <div className={styles.optionSection}>
+                                    <div className={styles.optionGrid}>
+                                        {(product.sizes?.length > 0 ? product.sizes : ["S", "M", "L", "XL"]).map((size: string) => (
+                                            <button key={size} className={`${styles.optionBtn} ${selectedSize === size ? styles.optionBtnActive : ""}`} onClick={() => setSelectedSize(size)}>{size}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <div className={styles.optionSection}>
+                                <div className={styles.colorGrid}>
+                                    {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
+                                        <button key={color.name} className={`${styles.colorBtn} ${selectedColorName === color.name ? styles.colorBtnActive : ""}`} style={{ backgroundColor: color.hex }} onClick={() => setSelectedColorName(color.name)} aria-label={color.name} />
+                                    ))}
+                                </div>
+                                <div className="mt-4">
+                                    <span className={styles.colorIndicator}>{selectedColorName} Edition</span>
+                                </div>
+                            </div>
+                            <div className={styles.actionRow}>
+                                {product.stock > 0 ? (
+                                    <>
+                                        <div className={styles.qtySelector}>
+                                            <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
+                                            <span className="text-sm font-light">{count}</span>
+                                            <button className={styles.qtyBtn} onClick={() => setCount(count + 1)}>+</button>
+                                        </div>
+                                        <div className="flex gap-4 w-full">
+                                            <button className={styles.buyBtn} onClick={() => addToCart(product)}>Add to Card</button>
+                                            <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
+                                                <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="w-full">
+                                        <div className={styles.soldOutBox}>SOLD OUT</div>
+                                        <button className={styles.notifyBtn}>NOTIFY ME WHEN AVAILABLE</button>
+                                    </div>
+                                )}
+                            </div>
+                            <ul className={styles.featureList}>
+                                <div className={styles.exclusiveBranding} style={{ marginTop: '-20px', marginBottom: '40px' }}>
+                                    DESCRIPTION
+                                </div>
+                                {product.description ? (
+                                    product.description.split('\n').filter((line: string) => line.trim() !== "").map((line: string, idx: number) => (
+                                        <li key={idx} className={styles.featureItem}><Plus size={14} /> {line.trim()}</li>
+                                    ))
+                                ) : (
+                                    <>
+                                        <li className={styles.featureItem}><Plus size={14} /> 100% Organic Mediterranean Cotton</li>
+                                        <li className={styles.featureItem}><Plus size={14} /> Hand-finished details by local artisans</li>
+                                    </>
+                                )}
+                            </ul>
+                        </div>
+                    </div>
+
+                    {/* MOBILE ONLY: RELATED & FOOTER (FULL WIDTH) */}
+                    <div className={styles.mobileExtraContent}>
+                        {historyItems.length > 0 && (
+                            <div className={styles.relatedSection}>
+                                <div className={styles.sectionTitleBlock}>
+                                    <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
+                                </div>
+                                <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
+                                    {historyItems.map((p: any) => (
+                                        <div key={p.id} className={styles.productCard}>
+                                            <div className={styles.gridImageWrapper}>
+                                                <Image src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} alt={p.name} fill className={styles.gridImg} sizes="(max-width: 768px) 100vw, 25vw" />
+                                                {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
+                                            </div>
+                                            <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
+                                                <h4 className={styles.gridName}>{p.name}</h4>
+                                                <div className={styles.gridPrice}>{p.price} €</div>
+                                            </Link>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
-                    </ul>
+
+                        <div className={styles.footerMain}>
+                            <div className={styles.footerContent}>
+                                <div>
+                                    <h2 className={styles.newsletterTitle}>Newsletter.</h2>
+                                    <div className={styles.newsletterInputWrapper}>
+                                        <input type="email" placeholder="Your email address" className={styles.newsletterInput} />
+                                        <button className={styles.newsletterBtn} aria-label="Subscribe"><ChevronRight size={35} /></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={styles.footerBottom}>
+                                <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-
-            {/* RELATED SECTION */}
-            {historyItems.length > 0 && (
-                <section className={styles.relatedSection}>
-                    <div className={styles.sectionTitleBlock}>
-                        <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
-                    </div>
-                    <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
-                        {historyItems.map((p: any) => (
-                            <div key={p.id} className={styles.productCard}>
-                                <div className={styles.gridImageWrapper}>
-                                    <Image src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} alt={p.name} fill className={styles.gridImg} sizes="(max-width: 768px) 100vw, 25vw" />
-                                    {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
-                                    <div className={styles.cardQuickAdd}>
-                                        <div className="flex gap-2 w-full p-4">
-                                            <button onClick={() => addToCart(p)} className="flex-1 bg-black text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-full hover:scale-105 active:scale-95 transition-all">Add +</button>
-                                            <button onClick={(e) => { e.preventDefault(); toggleWishlist(p); }} className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all">
-                                                <Heart size={16} className={wishlist.find((w: any) => w.id === p.id) ? "fill-pink-500 text-pink-500" : "text-black/20"} />
-                                            </button>
+            {/* DESKTOP ONLY: RELATED & FOOTER (HIDDEN ON MOBILE) */}
+            <div className={styles.desktopExtraArea}>
+                {historyItems.length > 0 && (
+                    <section className={styles.relatedSection}>
+                        <div className={styles.sectionTitleBlock}>
+                            <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
+                        </div>
+                        <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
+                            {historyItems.map((p: any) => (
+                                <div key={p.id} className={styles.productCard}>
+                                    <div className={styles.gridImageWrapper}>
+                                        <Image src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/clothing.png")} alt={p.name} fill className={styles.gridImg} sizes="(max-width: 768px) 100vw, 25vw" />
+                                        {p.stock === 0 && <span className={styles.soldOutBadge}>SOLD OUT</span>}
+                                        <div className={styles.cardQuickAdd}>
+                                            <div className="flex gap-2 w-full p-4">
+                                                <button onClick={() => addToCart(p)} className="flex-1 bg-black text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-full hover:scale-105 active:scale-95 transition-all">Add +</button>
+                                                <button onClick={(e) => { e.preventDefault(); toggleWishlist(p); }} className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all">
+                                                    <Heart size={16} className={wishlist.find((w: any) => w.id === p.id) ? "fill-pink-500 text-pink-500" : "text-black/20"} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
+                                    <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
+                                        <span className={styles.gridCat}>{categories.find(c => c.id === p.category_id)?.name || "BOUTIQUE"}</span>
+                                        <h4 className={styles.gridName}>{p.name}</h4>
+                                        <div className={styles.gridPrice}>{p.price} €</div>
+                                    </Link>
                                 </div>
-                                <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
-                                    <span className={styles.gridCat}>{categories.find(c => c.id === p.category_id)?.name || "BOUTIQUE"}</span>
-                                    <h4 className={styles.gridName}>{p.name}</h4>
-                                    <div className={styles.gridPrice}>{p.price} €</div>
-                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                <footer className={styles.footerMain}>
+                    <div className={styles.footerContent}>
+                        <div>
+                            <h2 className={styles.newsletterTitle}>Newsletter.</h2>
+                            <div className={styles.newsletterInputWrapper}>
+                                <input type="email" placeholder="Your email address" className={styles.newsletterInput} />
+                                <button className={styles.newsletterBtn} aria-label="Subscribe"><ChevronRight size={35} /></button>
                             </div>
-                        ))}
-                    </div>
-                </section>
-            )}
-
-
-
-
-
-            {/* FOOTER */}
-            <footer className={styles.footerMain}>
-                <div className={styles.footerContent} style={{ position: 'relative', zIndex: 10 }}>
-                    <div>
-                        <h2 className={styles.newsletterTitle}>Newsletter.</h2>
-                        <div className={styles.newsletterInputWrapper}>
-                            <input type="email" placeholder="Your email address" className={styles.newsletterInput} />
-                            <button className={styles.newsletterBtn} aria-label="Subscribe"><ChevronRight size={35} /></button>
+                        </div>
+                        <div>
+                            <h3 className="text-[10px] tracking-[0.5em] uppercase opacity-30 mb-10 font-black">Company</h3>
+                            <ul className={styles.footerLinks}>
+                                <li><Link href="/">Home</Link></li>
+                                <li><Link href="/shop">Collections</Link></li>
+                                <li><Link href="/">Our Journal</Link></li>
+                                <li><Link href="/">Contact</Link></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="text-[10px] tracking-[0.5em] uppercase opacity-30 mb-10 font-black">Categories</h3>
+                            <ul className={styles.footerLinks}>
+                                {categories.filter(c => c.id !== 'ALL').slice(0, 4).map((cat: any) => (
+                                    <li key={cat.id}><Link href={`/shop?category=${cat.name.toLowerCase()}`}>{cat.name}</Link></li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
-                    <div>
-                        <h3 className="text-[10px] tracking-[0.5em] uppercase opacity-30 mb-10 font-black">Company</h3>
-                        <ul className={styles.footerLinks}>
-                            <li><Link href="/">Home</Link></li>
-                            <li><Link href="/shop">Collections</Link></li>
-                            <li><Link href="/">Our Journal</Link></li>
-                            <li><Link href="/">Contact</Link></li>
-                        </ul>
+                    <div className={styles.footerBottom}>
+                        <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
                     </div>
-                    <div>
-                        <h3 className="text-[10px] tracking-[0.5em] uppercase opacity-30 mb-10 font-black">Categories</h3>
-                        <ul className={styles.footerLinks}>
-                            {categories.filter(c => c.id !== 'ALL').slice(0, 4).map((cat: any) => (
-                                <li key={cat.id}><Link href={`/shop?category=${cat.name.toLowerCase()}`}>{cat.name}</Link></li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-                <div className={styles.footerBottom} style={{ position: 'relative', zIndex: 10 }}>
-                    <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
-                </div>
-            </footer>
+                </footer>
+            </div>
 
             {/* STICKY BAR */}
             <div className={`${styles.stickyBarContainer} ${activeProduct ? styles.stickyBarVisible : ""}`}>

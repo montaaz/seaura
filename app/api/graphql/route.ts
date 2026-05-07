@@ -47,6 +47,7 @@ const typeDefs = gql`
     colors: [Color!]
     images: [String!]
     sizes: [String!]
+    has_sizes: Boolean
     stock: Int
     created_at: String
   }
@@ -149,12 +150,12 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], stock: Int): Product!
-    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], stock: Int): Product!
+    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
+    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
     deleteProduct(id: ID!): Boolean!
     updateHomeContent(key: String!, value: String!, type: String!, section: String): HomeContent!
     subscribeNewsletter(email: String!): Boolean!
-    createOrder(total: Float!, items: [OrderItemInput!]!, email: String, phone: String): Order!
+    createOrder(total: Float!, items: [OrderItemInput!]!, email: String, phone: String, address: String, city: String): Order!
     updateOrderStatus(id: ID!, status: String!): Order!
     updateCart(sessionId: String!, items: String!): Boolean!
     createCategory(name: String!, image_url: String): Category!
@@ -180,7 +181,7 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, stock, created_at
+        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, stock, created_at
         FROM products 
         ORDER BY created_at DESC
         ${limitStr}
@@ -319,7 +320,7 @@ const resolvers = {
     },
     product: async (_: any, { id }: any) => {
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, image_url, images, stock
+        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, image_url, images, stock
         FROM products WHERE id = $1
       `, [id]);
       const r = res.rows[0];
@@ -331,19 +332,19 @@ const resolvers = {
     }
   },
   Mutation: {
-    createProduct: async (_: any, { name, description, price, image_url, category_id, colors, images, sizes, stock }: any, context: any) => {
+    createProduct: async (_: any, { name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO products (name, description, price, image_url, category_id, colors, images, sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), stock || 10]
+        "INSERT INTO products (name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock || 10]
       );
       return res.rows[0];
     },
-    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, colors, images, sizes, stock }: any, context: any) => {
+    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, colors = $6, images = $7, sizes = $8, stock = $9 WHERE id = $10 RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), stock, id]
+        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, colors = $6, images = $7, sizes = $8, has_sizes = $9, stock = $10 WHERE id = $11 RETURNING *",
+        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock, id]
       );
       return res.rows[0];
     },
@@ -371,11 +372,11 @@ const resolvers = {
       );
       return true;
     },
-    createOrder: async (_: any, { total, items, email, phone }: any, context: any) => {
+    createOrder: async (_: any, { total, items, email, phone, address, city }: any, context: any) => {
       const userId = context.session?.user?.id || null;
       const orderRes = await query(
-        "INSERT INTO orders (user_id, total, status, customer_email, customer_phone) VALUES ($1, $2, $3, $4, $5) RETURNING *, created_at::text",
-        [userId, total, 'PENDING', email, phone]
+        "INSERT INTO orders (user_id, total, status, customer_email, customer_phone, address, city) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *, created_at::text",
+        [userId, total, 'PENDING', email, phone, address, city]
       );
       const order = orderRes.rows[0];
       

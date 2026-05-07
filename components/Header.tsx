@@ -183,6 +183,25 @@ export default function Header({
                                     </li>
                                 );
                             })}
+
+                            <li className={styles.mobileSidebarTitle}>ESPACE PERSONNEL</li>
+                            
+                            <li className={styles.mobileSidebarLink}>
+                                <Link href="/dashboard?tab=wishlist" onClick={() => setIsMenuOpen(false)}>
+                                    <div className="flex items-center gap-4">
+                                        <Heart size={20} className={wishlistCount > 0 ? "text-pink-500 fill-pink-500" : ""} />
+                                        <span>Wishlist {wishlistCount > 0 && `(${wishlistCount})`}</span>
+                                    </div>
+                                </Link>
+                            </li>
+                            <li className={styles.mobileSidebarLink}>
+                                <button onClick={() => { setIsMenuOpen(false); onCartClick?.(); }} className="w-full text-left p-0 bg-transparent border-none cursor-pointer">
+                                    <div className="flex items-center gap-4">
+                                        <ShoppingBag size={20} />
+                                        <span>Mon Panier {cartCount > 0 && `(${cartCount})`}</span>
+                                    </div>
+                                </button>
+                            </li>
                         </ul>
                     </nav>
 

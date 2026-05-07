@@ -108,6 +108,24 @@ export const initDb = async () => {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sub_category_id') THEN
           ALTER TABLE products ADD COLUMN sub_category_id INTEGER REFERENCES sub_categories(id) ON DELETE SET NULL;
         END IF;
+
+        if NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='has_sizes') THEN
+          ALTER TABLE products ADD COLUMN has_sizes BOOLEAN DEFAULT TRUE;
+        END IF;
+
+        -- Order columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customer_email') THEN
+          ALTER TABLE orders ADD COLUMN customer_email VARCHAR(255);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customer_phone') THEN
+          ALTER TABLE orders ADD COLUMN customer_phone VARCHAR(50);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='address') THEN
+          ALTER TABLE orders ADD COLUMN address TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='city') THEN
+          ALTER TABLE orders ADD COLUMN city VARCHAR(255);
+        END IF;
       END $$;
 
       CREATE TABLE IF NOT EXISTS home_content (
