@@ -1678,7 +1678,7 @@
         top: 0;
         left: 0;
         width: 100vw;
-        height: calc(100dvh - 110px);
+        height: 100dvh;
         /* Leave space for the bar peek */
         z-index: 0;
         background: #fff;
@@ -1698,7 +1698,7 @@
 
     .verticalImageItem {
         width: 100vw;
-        height: calc(100dvh - 110px);
+        height: 100dvh;
         /* Exactly one screen minus the bar */
         scroll-snap-align: start;
         scroll-snap-stop: always;
@@ -1781,10 +1781,10 @@
         border-top-left-radius: 30px;
         border-top-right-radius: 30px;
         z-index: 1000;
-        transform: translateY(calc(100% - 480px));
+        transform: translateY(calc(100% - 115px));
         transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
         box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.15);
-        height: 90vh;
+        height: 100dvh;
         overflow-y: auto;
         margin-top: 0;
         padding: 0;
@@ -1792,6 +1792,17 @@
     }
 
     .detailsExpanded {
+        transform: translateY(0);
+    }
+
+    .mobileSummaryBar > div > *:not(:first-child) {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.4s ease;
+    }
+
+    .detailsExpanded .mobileSummaryBar > div > * {
+        opacity: 1;
         transform: translateY(0);
     }
 
