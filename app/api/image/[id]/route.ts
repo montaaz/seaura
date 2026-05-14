@@ -25,12 +25,26 @@ export async function GET(
         const data = res.rows[0];
         if (!data) return new Response("Not Found", { status: 404 });
 
-        let rawValue = type === 'product' ? data.image_url : (type === 'category' ? data.image_url : (type === 'subcategory' ? data.image_url : data.value));
+        const imagesArr = typeof data.images === 'string' ? JSON.parse(data.images) : (data.images || []);
+        let rawValue = data.image_url;
 
-        // If an index is provided, pull from the images array instead
-        if (type === 'product' && idx !== null) {
-            const imagesArr = typeof data.images === 'string' ? JSON.parse(data.images) : (data.images || []);
-            rawValue = imagesArr[parseInt(idx)] || rawValue;
+        // Priority Logic for Products:
+        if (type === 'product') {
+            if (idx !== null) {
+                rawValue = imagesArr[parseInt(idx)] || rawValue;
+            } else {
+                // Aggressively prefer the first image in the array if it exists
+                if (imagesArr.length > 0 && imagesArr[0] && imagesArr[0].length > 10) {
+                    rawValue = imagesArr[0];
+                }
+            }
+        } else {
+            // Categories/Subcategories/Home
+            rawValue = type === 'category' ? data.image_url : (type === 'subcategory' ? data.image_url : data.value);
+        }
+
+        if (!rawValue || rawValue.length < 5) {
+            return NextResponse.redirect(new URL("/logo1.png", request.url));
         }
 
         // Check if it's a base64 data URL
@@ -49,7 +63,11 @@ export async function GET(
         }
 
         // If it's already a URL, redirect to it
-        return NextResponse.redirect(new URL(rawValue, request.url));
+        try {
+            return NextResponse.redirect(new URL(rawValue, request.url));
+        } catch (e) {
+            return NextResponse.redirect(new URL("/logo1.png", request.url));
+        }
 
     } catch (err) {
         console.error("Image Proxy Error:", err);

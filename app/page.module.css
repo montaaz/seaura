@@ -1047,7 +1047,8 @@
   font-weight: 500;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: #1a2b4b; /* Dark navy/black typical of the brand */
+  color: #1a2b4b;
+  /* Dark navy/black typical of the brand */
   margin: 15px 0 10px;
   text-align: center;
   line-height: 1.4;
@@ -1105,12 +1106,12 @@
 }
 
 .instaHeading {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 40px;
-  font-weight: 400;
-  letter-spacing: 0.2em;
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   color: #111;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
   text-transform: uppercase;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1118,13 +1119,15 @@
 
 .instaSubtext {
   font-family: 'Raleway', sans-serif;
-  font-size: 15px;
-  color: #1c1c1c;
-  letter-spacing: 0.05em;
-  max-width: 700px;
+  font-size: 23px;
+  color: #333;
+  letter-spacing: 0.08em;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 40px;
   margin: 0 auto;
-  line-height: 1.6;
-  opacity: 0.8;
+  line-height: 1.8;
+  font-weight: 400;
 }
 
 .instaTicker {
@@ -1162,7 +1165,8 @@
 @media (max-width: 768px) {
   .instaTickerItem {
     flex: 0 0 calc(100vw / 2.5);
-    height: 50vw; /* Improved aspect ratio for 2.5 items */
+    height: 50vw;
+    /* Improved aspect ratio for 2.5 items */
   }
 }
 
@@ -1328,7 +1332,7 @@
     font-weight: 500 !important;
     margin-bottom: 0 !important;
     text-transform: none !important;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   }
 
   .cardLink {
@@ -1820,8 +1824,10 @@
 
 @media (max-width: 768px) {
   .chatBubble {
-    right: 25px;
-    bottom: 100px;
+    right: 20px;
+    bottom: 180px;
+    width: 55px;
+    height: 55px;
   }
 
   .chatWindow {

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ShoppingCart, LogOut, Package, Heart, User, ChevronRight, Home } from "lucide-react";
-import ChatWidget from "@/components/ChatWidget";
 
 export default function ClientDashboard() {
     const { data: session, status } = useSession();
@@ -221,7 +220,7 @@ export default function ClientDashboard() {
                                             </div>
                                             <div className="p-8">
                                                 <h3 className="text-lg font-light tracking-tight mb-1">{item.name}</h3>
-                                                <p className="text-xl font-medium mb-6">{item.price} €</p>
+                                                <p className="text-xl font-medium mb-6">{item.price} TND</p>
                                                 <div className="flex gap-4">
                                                     <Link 
                                                         href={`/product/${item.id}`}
@@ -245,7 +244,6 @@ export default function ClientDashboard() {
                     )}
                 </main>
             </div>
-            <ChatWidget userEmail={session?.user?.email} />
         </div>
     );
 }

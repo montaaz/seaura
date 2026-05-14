@@ -7,6 +7,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Heart, ShoppingBag, User as UserIcon, X as CloseIcon, ChevronRight, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 
 const Search = dynamic(() => import('./Search'), { ssr: false });
 
@@ -35,6 +36,14 @@ export default function Header({
     const [forceOpenSearch, setForceOpenSearch] = useState(false);
     const [localIsScrolled, setLocalIsScrolled] = useState(false);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        if (searchParams.get("search") === "true") {
+            setForceOpenSearch(true);
+            setTimeout(() => setForceOpenSearch(false), 500);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const handleScroll = () => {

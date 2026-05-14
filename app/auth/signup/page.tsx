@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Swal from 'sweetalert2';
 import Link from "next/link";
@@ -10,6 +10,22 @@ export default function SignUp() {
     const [password, setPassword] = useState("");
     const [name, setName] = useState("");
     const router = useRouter();
+
+    const [signupImage, setSignupImage] = useState("/images/bags.png");
+
+    useEffect(() => {
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ homeContent { key value } }' })
+        })
+        .then(res => res.json())
+        .then(data => {
+            const img = data.data?.homeContent?.find((item: any) => item.key === 'auth_signup_image');
+            if (img?.value) setSignupImage(img.value);
+        })
+        .catch(err => console.error("CMS Fetch Error:", err));
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,7 +72,7 @@ export default function SignUp() {
             {/* Left: The Immersive Vision (Full Height) */}
             <div className="hidden lg:block lg:w-[50%] relative overflow-hidden group">
                 <img
-                    src="/images/bags.png"
+                    src={signupImage}
                     alt="SEAURA Vision"
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-out group-hover:scale-105"
                 />
@@ -65,7 +81,6 @@ export default function SignUp() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
                 <div className="absolute bottom-16 left-16 z-10 text-white animate-in slide-in-from-bottom-5 duration-1000">
-                    <p className="text-[10px] uppercase font-bold tracking-[0.6em] mb-4 opacity-70">L'Art de Vivre</p>
                     <h2 className="text-8xl font-thin tracking-[0.1em] leading-none mb-4">SEAURA</h2>
                     <div className="h-[1px] w-24 bg-white/30" />
                 </div>
@@ -75,16 +90,13 @@ export default function SignUp() {
             <div className="w-full lg:w-[50%] flex flex-col justify-center p-8 md:p-24 bg-white relative">
 
                 {/* Top Corner Brand Info */}
-                <div className="absolute top-12 right-12 flex items-center gap-4 opacity-40">
-                    <span className="text-[9px] font-bold tracking-[0.4em] uppercase">Auth-Node V4</span>
-                    <div className="h-[1px] w-8 bg-black" />
-                </div>
+
 
                 <div className="w-full max-w-[420px] mx-auto animate-in fade-in slide-in-from-right-10 duration-1000">
                     <div className="mb-20">
                         <span className="text-[10px] font-bold tracking-[0.6em] text-gray-300 uppercase block mb-4">Nouveau Profil</span>
                         <h1 className="text-6xl font-extralight tracking-tight text-black mb-6">Inscription</h1>
-                        <p className="text-sm font-medium text-gray-400">Rejoignez la maison SEAURA pour une expérience exclusive.</p>
+                        <p className="text-sm font-medium text-gray-400">Rejoignez SEAURA pour une expérience exclusive.</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-8 text-left">

@@ -118,11 +118,15 @@ export default function Search({ isScrolled, onOpenChange, forceOpen }: SearchPr
                         onClick={handleClose}
                       >
                         <div className={styles.resultImage}>
-                          <Image src={product.image_url || "/images/hero.png"} alt={product.name} fill sizes="80px" />
+                          <img 
+                            src={product.image_url || "/logo1.png"} 
+                            alt={product.name} 
+                            className="object-cover w-full h-full"
+                          />
                         </div>
                         <div className={styles.resultInfo}>
                           <p className={styles.resultName}>{product.name}</p>
-                          <p className={styles.resultPrice}>{product.price} €</p>
+                          <p className={styles.resultPrice}>{product.price} TND</p>
                         </div>
                       </Link>
                     ))}

@@ -160,14 +160,47 @@ function ShopDetail() {
         });
     };
 
-    const addToCart = (product: any) => {
-        if (!userEmail) { setIsEmailModalOpen(true); return; }
-        setCart(prev => [...prev, {
-            ...product,
-            selectedSize: product.has_sizes !== false ? selectedSize : "Standard",
-            selectedColor: selectedColorName
-        }]);
+    const addToCart = (product: any, quantity: number = 1) => {
+        if (!userEmail) setIsEmailModalOpen(true);
+        
+        // CHECK STOCK
+        if (product.stock < quantity) {
+            alert("Not enough stock available");
+            return;
+        }
+
+        setCart(prev => {
+            const isExist = prev.find(item => 
+                item.id === product.id && 
+                item.selectedSize === (product.has_sizes !== false ? selectedSize : "Standard") &&
+                item.selectedColor === selectedColorName
+            );
+
+            let updated;
+            if (isExist) {
+                updated = prev.map(item => 
+                    item === isExist 
+                        ? { ...item, quantity: (item.quantity || 1) + quantity }
+                        : item
+                );
+            } else {
+                updated = [...prev, {
+                    ...product,
+                    selectedSize: product.has_sizes !== false ? selectedSize : "Standard",
+                    selectedColor: selectedColorName,
+                    quantity: quantity
+                }];
+            }
+            return updated;
+        });
+
+        // DECREMENT LOCAL STOCK
+        if (product.id === productId) {
+            setProduct((prev: any) => ({ ...prev, stock: prev.stock - quantity }));
+        }
+
         setIsCartOpen(true);
+        setCount(1); // Reset counter
     };
 
     const removeFromCart = (index: number) => {
@@ -223,7 +256,7 @@ function ShopDetail() {
             const viewed = ids
                 .map((id: any) => products.find((p: any) => String(p.id) === String(id)))
                 .filter(Boolean)
-                .slice(0, 3);
+                .slice(0, 5);
             setHistoryItems(viewed);
         }
     }, [products, productId]);
@@ -298,6 +331,9 @@ function ShopDetail() {
                 forceBlack={true}
             />
 
+            {/* BRAND DIVIDER LINE */}
+            <div className={styles.brandDivider} />
+
             {/* PRODUCT DETAIL SECTION */}
             <section className={styles.featuredProduct} style={{ marginTop: '0px' }}>
                 <div className={styles.productDisplay}>
@@ -348,20 +384,50 @@ function ShopDetail() {
                     </div>
 
                     <div className={styles.mobileSummaryBar}>
-                        <div className="flex justify-between items-center w-full px-6 py-4">
-                            <div>
-                                <h2 className={styles.detailTitle}>{product.name}</h2>
-                                <div className={styles.detailPrice}>{product.price} €</div>
+                        <div className="px-6 py-8 flex flex-col gap-6">
+                            <h2 className={styles.detailTitle}>{product.name}</h2>
+                            <div className={styles.detailPrice}>{product.price} TND</div>
+                            
+                            <div className={styles.colorGrid}>
+                                {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
+                                    <button 
+                                        key={color.name} 
+                                        className={`${styles.colorBtn} ${selectedColorName === color.name ? styles.colorBtnActive : ""}`} 
+                                        style={{ backgroundColor: color.hex }} 
+                                        onClick={() => setSelectedColorName(color.name)} 
+                                        aria-label={color.name} 
+                                    />
+                                ))}
                             </div>
-                            <div>
-                                <button className={styles.mobileAddBtn} onClick={() => addToCart(product)}>ADD +</button>
+
+                            <div className={styles.qtySelector}>
+                                <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
+                                <span className="text-sm font-light">{count}</span>
+                                <button className={styles.qtyBtn} onClick={() => setCount(Math.min(product.stock, count + 1))}>+</button>
+                            </div>
+
+                            <div className="flex flex-col gap-4 w-full">
+                                <div className="flex gap-4 w-full">
+                                    <button className={styles.buyBtn} onClick={() => addToCart(product, count)} style={{ padding: '18px', width: '100%' }}>ADD TO CARD</button>
+                                    <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95 flex-shrink-0">
+                                        <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
+                                    </button>
+                                </div>
+                                <a 
+                                    href="https://wa.me/+21625489395" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className={styles.personalizeBtn}
+                                >
+                                    PERSONNALISER
+                                </a>
                             </div>
                         </div>
                     </div>
 
                     <div className={styles.detailsMainContent} style={{ paddingTop: '0' }}>
                         <h2 className={styles.detailTitle} style={{ marginTop: '0' }}>{product.name}</h2>
-                        <div className={styles.detailPrice}>{product.price} €</div>
+                        <div className={styles.detailPrice}>{product.price} TND</div>
 
                         <div className={`${styles.collapsibleContent} ${isExpanded ? styles.contentVisible : ""}`}>
                             {product.has_sizes !== false && (
@@ -373,14 +439,11 @@ function ShopDetail() {
                                     </div>
                                 </div>
                             )}
-                            <div className={styles.optionSection}>
+                            <div className={`${styles.optionSection} ${styles.hideOnMobile}`}>
                                 <div className={styles.colorGrid}>
                                     {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
                                         <button key={color.name} className={`${styles.colorBtn} ${selectedColorName === color.name ? styles.colorBtnActive : ""}`} style={{ backgroundColor: color.hex }} onClick={() => setSelectedColorName(color.name)} aria-label={color.name} />
                                     ))}
-                                </div>
-                                <div className="mt-4">
-                                    <span className={styles.colorIndicator}>{selectedColorName} Edition</span>
                                 </div>
                             </div>
                             <div className={styles.actionRow}>
@@ -389,13 +452,23 @@ function ShopDetail() {
                                         <div className={styles.qtySelector}>
                                             <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
                                             <span className="text-sm font-light">{count}</span>
-                                            <button className={styles.qtyBtn} onClick={() => setCount(count + 1)}>+</button>
+                                            <button className={styles.qtyBtn} onClick={() => setCount(Math.min(product.stock, count + 1))}>+</button>
                                         </div>
-                                        <div className="flex gap-4 w-full">
-                                            <button className={styles.buyBtn} onClick={() => addToCart(product)}>Add to Card</button>
-                                            <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
-                                                <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
-                                            </button>
+                                        <div className="flex flex-col gap-4 w-full">
+                                            <div className="flex gap-4 w-full">
+                                                <button className={styles.buyBtn} onClick={() => addToCart(product, count)}>Add to Card</button>
+                                                <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95">
+                                                    <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
+                                                </button>
+                                            </div>
+                                            <a 
+                                                href="https://wa.me/+21625489395" 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className={styles.personalizeBtn}
+                                            >
+                                                PERSONNALISER
+                                            </a>
                                         </div>
                                     </>
                                 ) : (
@@ -411,12 +484,12 @@ function ShopDetail() {
                                 </div>
                                 {product.description ? (
                                     product.description.split('\n').filter((line: string) => line.trim() !== "").map((line: string, idx: number) => (
-                                        <li key={idx} className={styles.featureItem}><Plus size={14} /> {line.trim()}</li>
+                                        <li key={idx} className={styles.featureItem}><Plus size={16} /> {line.trim()}</li>
                                     ))
                                 ) : (
                                     <>
-                                        <li className={styles.featureItem}><Plus size={14} /> 100% Organic Mediterranean Cotton</li>
-                                        <li className={styles.featureItem}><Plus size={14} /> Hand-finished details by local artisans</li>
+                                        <li className={styles.featureItem}><Plus size={16} /> 100% Organic Mediterranean Cotton</li>
+                                        <li className={styles.featureItem}><Plus size={16} /> Hand-finished details by local artisans</li>
                                     </>
                                 )}
                             </ul>
@@ -428,7 +501,7 @@ function ShopDetail() {
                         {historyItems.length > 0 && (
                             <div className={styles.relatedSection}>
                                 <div className={styles.sectionTitleBlock}>
-                                    <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
+                                    <span className={styles.sectionTag}>Produits récemment consultés</span>
                                 </div>
                                 <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
                                     {historyItems.map((p: any) => (
@@ -439,7 +512,7 @@ function ShopDetail() {
                                             </div>
                                             <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
                                                 <h4 className={styles.gridName}>{p.name}</h4>
-                                                <div className={styles.gridPrice}>{p.price} €</div>
+                                                <div className={styles.gridPrice}>{p.price} TND</div>
                                             </Link>
                                         </div>
                                     ))}
@@ -458,7 +531,7 @@ function ShopDetail() {
                                 </div>
                             </div>
                             <div className={styles.footerBottom}>
-                                <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
+                                <p>© 2026 S E A U R A </p>
                             </div>
                         </div>
                     </div>
@@ -470,7 +543,7 @@ function ShopDetail() {
                 {historyItems.length > 0 && (
                     <section className={styles.relatedSection}>
                         <div className={styles.sectionTitleBlock}>
-                            <span className={styles.sectionTag}>PIÈCES D'EXCEPTION</span>
+                            <span className={styles.sectionTag}>Produits récemment consultés</span>
                         </div>
                         <div className={`${styles.productGrid} ${styles.threeColGrid}`}>
                             {historyItems.map((p: any) => (
@@ -488,9 +561,8 @@ function ShopDetail() {
                                         </div>
                                     </div>
                                     <Link href={`/shop/${p.id}`} className={styles.gridInfo}>
-                                        <span className={styles.gridCat}>{categories.find(c => c.id === p.category_id)?.name || "BOUTIQUE"}</span>
                                         <h4 className={styles.gridName}>{p.name}</h4>
-                                        <div className={styles.gridPrice}>{p.price} €</div>
+                                        <div className={styles.gridPrice}>{p.price} TND</div>
                                     </Link>
                                 </div>
                             ))}
@@ -526,7 +598,7 @@ function ShopDetail() {
                         </div>
                     </div>
                     <div className={styles.footerBottom}>
-                        <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
+                        <p>© 2026 S E A U R A </p>
                     </div>
                 </footer>
             </div>
@@ -540,8 +612,8 @@ function ShopDetail() {
                     <div className={styles.stickyText}><h4>{activeProduct?.name}</h4><p>{selectedColorName} • {selectedSize}</p></div>
                 </div>
                 <div className="flex items-center">
-                    <span className={styles.stickyPrice}>{activeProduct?.price} €</span>
-                    <button className={styles.stickyBtn} onClick={() => addToCart(activeProduct)}>Quick Add</button>
+                    <span className={styles.stickyPrice}>{activeProduct?.price} TND</span>
+                    <button className={styles.stickyBtn} onClick={() => addToCart(activeProduct, 1)}>Quick Add</button>
                 </div>
             </div>
 
@@ -556,13 +628,17 @@ function ShopDetail() {
                             <div className={styles.cartItemThumb} style={{ position: 'relative' }}>
                                 <Image src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/images/clothing.png")} alt={item.name} fill sizes="80px" className="object-cover" />
                             </div>
-                            <div className={styles.cartItemInfo}><h4>{item.name}</h4><p>{item.selectedColor} — {item.selectedSize}</p><div className={styles.cartItemPrice}>{item.price} €</div></div>
+                            <div className={styles.cartItemInfo}>
+                                <h4>{item.name}</h4>
+                                <p>{item.selectedColor} — {item.selectedSize} {item.quantity > 1 ? `(x${item.quantity})` : ""}</p>
+                                <div className={styles.cartItemPrice}>{item.price} TND</div>
+                            </div>
                         </div>
                     ))}
                 </div>
                 {cart.length > 0 && (
                     <div className={styles.cartFooter}>
-                        <div className={styles.cartTotal}><span>Subtotal</span><span>{cart.reduce((sum, item) => sum + parseFloat(item.price), 0).toFixed(2)} €</span></div>
+                        <div className={styles.cartTotal}><span>Subtotal</span><span>{cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0).toFixed(2)} TND</span></div>
                         <button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button>
                     </div>
                 )}

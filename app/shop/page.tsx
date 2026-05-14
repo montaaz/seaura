@@ -41,7 +41,6 @@ function ShopListing() {
     const [wishlist, setWishlist] = useState<any[]>([]);
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
     const [selectedColor, setSelectedColor] = useState<string | null>(null);
-    const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
 
     const colors = [
         { name: "Marron", hex: "#7B5542" }, { name: "Noir", hex: "#000000" },
@@ -67,11 +66,10 @@ function ShopListing() {
         const matchesSearch = !searchQuery ||
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesPrice = parseFloat(p.price) >= priceRange[0] && parseFloat(p.price) <= priceRange[1];
         // Note: Color filtering would need product color data, assuming p.colors matches
         const matchesColor = !selectedColor || p.colors?.some((c: any) => c.name.toLowerCase() === selectedColor.toLowerCase());
 
-        return matchesCategory && matchesSearch && matchesPrice && matchesColor;
+        return matchesCategory && matchesSearch && matchesColor;
     });
 
     useEffect(() => {
@@ -135,7 +133,7 @@ function ShopListing() {
     }, [categoryQuery, termQuery, categories]);
 
     const addToCart = (product: any) => {
-        if (!userEmail) { setIsEmailModalOpen(true); return; }
+        if (!userEmail) setIsEmailModalOpen(true);
         setCart(prev => [...prev, { ...product, selectedSize: product.sizes?.[0] || "M", selectedColor: product.colors?.[0]?.name || "Noir" }]);
         setIsCartOpen(true);
     };
@@ -221,7 +219,7 @@ function ShopListing() {
                         </button>
                         {activeDropdown === 'color' && (
                             <div className={styles.dropdownContent}>
-                                <div className={styles.colorGrid}>
+                                <div className={styles.colorFilterGrid}>
                                     {colors.map((color) => (
                                         <div
                                             key={color.name}
@@ -235,61 +233,6 @@ function ShopListing() {
                                 </div>
                                 <div className={styles.dropdownFooter}>
                                     <button className={styles.clearBtn} onClick={() => setSelectedColor(null)}>Effacer</button>
-                                    <button className={styles.applyBtn} onClick={() => setActiveDropdown(null)}>Voir {filteredProducts.length} produits</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className={styles.filterGroup}>
-                        <button
-                            className={`${styles.filterBtn} ${activeDropdown === 'price' ? styles.filterBtnActive : ""}`}
-                            onClick={() => setActiveDropdown(activeDropdown === 'price' ? null : 'price')}
-                        >
-                            Prix <ChevronDown size={14} className={activeDropdown === 'price' ? styles.rotateIcon : ""} />
-                        </button>
-                        {activeDropdown === 'price' && (
-                            <div className={styles.dropdownContent}>
-                                <div className={styles.priceContainer}>
-                                    <div className={styles.rangeSliderWrapper}>
-                                        <div className={styles.rangeTrackBase} />
-                                        <div
-                                            className={styles.rangeTrackActive}
-                                            style={{
-                                                left: `${(priceRange[0] / 1000) * 100}%`,
-                                                right: `${100 - (priceRange[1] / 1000) * 100}%`
-                                            }}
-                                        />
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="1000"
-                                            value={priceRange[0]}
-                                            onChange={(e) => {
-                                                const val = Math.min(parseInt(e.target.value), priceRange[1] - 10);
-                                                setPriceRange([val, priceRange[1]]);
-                                            }}
-                                            className={`${styles.rangeInput} ${styles.rangeInputMin}`}
-                                        />
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="1000"
-                                            value={priceRange[1]}
-                                            onChange={(e) => {
-                                                const val = Math.max(parseInt(e.target.value), priceRange[0] + 10);
-                                                setPriceRange([priceRange[0], val]);
-                                            }}
-                                            className={`${styles.rangeInput} ${styles.rangeInputMax}`}
-                                        />
-                                    </div>
-                                    <div className={styles.priceLabels}>
-                                        <span>{priceRange[0]} dt</span>
-                                        <span>{priceRange[1]} dt</span>
-                                    </div>
-                                </div>
-                                <div className={styles.dropdownFooter}>
-                                    <button className={styles.clearBtn} onClick={() => setPriceRange([0, 1000])}>Effacer</button>
                                     <button className={styles.applyBtn} onClick={() => setActiveDropdown(null)}>Voir {filteredProducts.length} produits</button>
                                 </div>
                             </div>
@@ -362,7 +305,7 @@ function ShopListing() {
                             <div className={styles.cartItemThumb} style={{ position: 'relative' }}>
                                 <Image src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/images/clothing.png")} alt={item.name} fill sizes="80px" className="object-cover" />
                             </div>
-                            <div className={styles.cartItemInfo}><h4>{item.name}</h4><p>{item.selectedColor} — {item.selectedSize}</p><div className={styles.cartItemPrice}>{item.price} €</div></div>
+                            <div className={styles.cartItemInfo}><h4>{item.name}</h4><p>{item.selectedColor} — {item.selectedSize}</p><div className={styles.cartItemPrice}>{item.price} TND</div></div>
                         </div>
                     ))}
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Swal from 'sweetalert2';
 import Link from "next/link";
@@ -12,6 +12,22 @@ export default function SignIn() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
+
+    const [signinImage, setSigninImage] = useState("/images/clothing.png");
+
+    useEffect(() => {
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ homeContent { key value } }' })
+        })
+        .then(res => res.json())
+        .then(data => {
+            const img = data.data?.homeContent?.find((item: any) => item.key === 'auth_signin_image');
+            if (img?.value) setSigninImage(img.value);
+        })
+        .catch(err => console.error("CMS Fetch Error:", err));
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,7 +63,7 @@ export default function SignIn() {
             {/* Left: The Immersive Vision (Full Height) */}
             <div className="hidden lg:block lg:w-[55%] relative overflow-hidden group">
                 <img
-                    src="/images/clothing.png"
+                    src={signinImage}
                     alt="SEAURA Vision"
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-out group-hover:scale-105"
                 />
@@ -66,10 +82,7 @@ export default function SignIn() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center p-8 md:p-24 bg-white relative">
 
                 {/* Top Corner Brand Info */}
-                <div className="absolute top-12 right-12 flex items-center gap-4 opacity-40">
-                    <span className="text-[9px] font-bold tracking-[0.4em] uppercase">Auth-Node V4</span>
-                    <div className="h-[1px] w-8 bg-black" />
-                </div>
+
 
                 <div className="w-full max-w-[420px] mx-auto animate-in fade-in slide-in-from-right-10 duration-1000">
                     <div className="mb-20">
@@ -126,7 +139,7 @@ export default function SignIn() {
                                     href="/auth/signup"
                                     className="text-[11px] text-gray-400 hover:text-black transition-all tracking-[0.25em] uppercase font-bold border-b border-gray-50 pb-2 hover:border-black"
                                 >
-                                    Rejoindre la Maison
+                                    Rejoignez Nous
                                 </Link>
 
                                 <Link

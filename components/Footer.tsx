@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { Instagram } from 'lucide-react';
 import styles from './Footer.module.css';
 import { useState } from 'react';
@@ -11,6 +12,13 @@ interface FooterProps {
 export default function Footer({ onSubscribe }: FooterProps) {
     const [email, setEmail] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const router = useRouter();
+    const pathname = usePathname();
+
+    const openSearch = (e: React.MouseEvent) => {
+        e.preventDefault();
+        router.push(`${pathname}?search=true`);
+    };
 
     const handleSubscribe = async () => {
         if (!email) return;
@@ -90,13 +98,13 @@ export default function Footer({ onSubscribe }: FooterProps) {
                 <div className={styles.footerCol}>
                     <h3 className={styles.footerHeading}>CUSTOMER SERVICE</h3>
                     <ul className={styles.footerLinks}>
-                        <li><a href="#">Search</a></li>
-                        <li><a href="#">About</a></li>
-                        <li><a href="#">Shipping</a></li>
-                        <li><a href="#">Materials & Care</a></li>
-                        <li><a href="#">Returns</a></li>
-                        <li><a href="#">Contact</a></li>
-                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#" onClick={openSearch}>Search</a></li>
+                        <li><Link href="/help?section=about">About</Link></li>
+                        <li><Link href="/help?section=shipping">Shipping</Link></li>
+                        <li><Link href="/help?section=materials">Materials & Care</Link></li>
+                        <li><Link href="/help?section=returns">Returns</Link></li>
+                        <li><Link href="/help?section=contact">Contact</Link></li>
+                        <li><Link href="/help?section=privacy">Privacy Policy</Link></li>
                     </ul>
                 </div>
 
@@ -110,7 +118,7 @@ export default function Footer({ onSubscribe }: FooterProps) {
                 </div>
             </div>
             <div className={styles.footerBottom}>
-                <p>© 2026 S E A U R A — Digital Boutique / Artisanal Heritage.</p>
+                <p>© 2026 S E A U R A </p>
             </div>
         </footer>
     );

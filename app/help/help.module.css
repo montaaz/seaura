@@ -1,0 +1,279 @@
+.helpPage {
+    min-height: 100vh;
+    background: #fff;
+    color: #000;
+}
+
+.helpMain {
+    padding-top: 120px;
+    padding-bottom: 100px;
+}
+
+.helpContainer {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 40px;
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 80px;
+}
+
+.helpSidebar {
+    position: sticky;
+    top: 120px;
+    height: fit-content;
+}
+
+.sidebarTitle {
+    font-size: 32px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    margin-bottom: 40px;
+    font-family: 'Raleway', sans-serif;
+}
+
+.helpNav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.navItem {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 18px 24px;
+    background: none;
+    border: none;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #999;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+}
+
+.navItem:hover {
+    background: #f9f9f9;
+    color: #000;
+    transform: translateX(5px);
+}
+
+.navItemActive {
+    background: #000 !important;
+    color: #fff !important;
+}
+
+.navIcon {
+    margin-right: 16px;
+    opacity: 0.5;
+}
+
+.navItemActive .navIcon {
+    opacity: 1;
+}
+
+.navArrow {
+    margin-left: auto;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.navItemActive .navArrow {
+    opacity: 0.5;
+    transform: translateX(5px);
+}
+
+.helpContent {
+    background: #fdfdfd;
+    border-radius: 40px;
+    padding: 80px;
+    min-height: 600px;
+    border: 1px solid rgba(0,0,0,0.03);
+}
+
+.contentWrapper {
+    max-width: 700px;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.contentTitle {
+    font-size: 48px;
+    font-weight: 300;
+    margin-bottom: 30px;
+    letter-spacing: -0.03em;
+}
+
+.contentText {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #555;
+    margin-bottom: 24px;
+}
+
+.helpList {
+    list-style: none;
+    padding: 0;
+    margin-top: 30px;
+}
+
+.helpList li {
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+    color: #666;
+    font-size: 15px;
+}
+
+.shippingGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 40px;
+}
+
+.shippingCard {
+    background: #fff;
+    padding: 30px;
+    border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+    border: 1px solid #f0f0f0;
+}
+
+.shippingCard h4 {
+    font-size: 18px;
+    margin-bottom: 15px;
+}
+
+.shippingCard p {
+    font-size: 14px;
+    color: #777;
+    margin-bottom: 8px;
+}
+
+.brandManifesto {
+    margin-top: 50px;
+    padding: 40px;
+    background: #000;
+    color: #fff;
+    border-radius: 30px;
+}
+
+.brandManifesto h3 {
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.brandManifesto ul {
+    list-style: none;
+    padding: 0;
+}
+
+.brandManifesto li {
+    margin-bottom: 12px;
+    font-size: 14px;
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+}
+
+.brandManifesto li::before {
+    content: "•";
+    margin-right: 10px;
+    color: #fff;
+}
+
+.searchPrompt {
+    display: flex;
+    gap: 12px;
+    margin-top: 30px;
+}
+
+.helpSearchInput {
+    flex: 1;
+    height: 60px;
+    border-radius: 30px;
+    padding: 0 30px;
+    border: 1px solid #eee;
+    background: #fff;
+    outline: none;
+}
+
+.helpSearchBtn {
+    padding: 0 40px;
+    background: #000;
+    color: #fff;
+    border-radius: 30px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.contactForm {
+    margin-top: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.helpInput {
+    height: 60px;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 16px;
+    padding: 0 24px;
+    outline: none;
+}
+
+.helpTextarea {
+    height: 150px;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 16px;
+    padding: 24px;
+    outline: none;
+    resize: none;
+}
+
+.helpSubmitBtn {
+    height: 60px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+@media (max-width: 1024px) {
+    .helpContainer {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+    
+    .helpSidebar {
+        position: static;
+    }
+    
+    .helpContent {
+        padding: 40px;
+    }
+}
+
+@media (max-width: 768px) {
+    .contentTitle {
+        font-size: 32px;
+    }
+    
+    .shippingGrid {
+        grid-template-columns: 1fr;
+    }
+}

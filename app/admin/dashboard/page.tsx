@@ -24,14 +24,15 @@ import {
     ShoppingBag,
     Settings,
     LayoutDashboard,
-    MessageCircle,
     Send,
     User as UserIcon,
     Calculator,
     TrendingUp,
     TrendingDown,
     DollarSign,
-    PieChart
+    PieChart,
+    HelpCircle,
+    FileText
 } from "lucide-react";
 
 function SettingsManager() {
@@ -109,7 +110,7 @@ function SettingsManager() {
                 <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
                     <Settings size={200} />
                 </div>
-                
+
                 <div className="relative z-10">
                     <div className="mb-12">
                         <h3 className="text-2xl font-light tracking-tight">Configuration SMTP</h3>
@@ -256,12 +257,13 @@ export default function AdminDashboard() {
                         <span className="text-xs uppercase font-bold tracking-[0.1em]">Commandes</span>
                     </button>
 
+
                     <button
-                        onClick={() => { setActiveTab('chat'); setIsSidebarOpen(false); }}
-                        className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'chat' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
+                        onClick={() => { setActiveTab('auth'); setIsSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'auth' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
                     >
-                        <MessageCircle size={20} />
-                        <span className="text-xs uppercase font-bold tracking-[0.1em]">Live Chat</span>
+                        <UserIcon size={20} />
+                        <span className="text-xs uppercase font-bold tracking-[0.1em]">Auth Experience</span>
                     </button>
 
                     <button
@@ -270,6 +272,14 @@ export default function AdminDashboard() {
                     >
                         <Settings size={20} />
                         <span className="text-xs uppercase font-bold tracking-[0.1em]">Paramètres</span>
+                    </button>
+
+                    <button
+                        onClick={() => { setActiveTab('help'); setIsSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'help' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
+                    >
+                        <HelpCircle size={20} />
+                        <span className="text-xs uppercase font-bold tracking-[0.1em]">Service Client</span>
                     </button>
 
                     <button
@@ -307,10 +317,10 @@ export default function AdminDashboard() {
                 <header className="flex justify-between items-end mb-12">
                     <div>
                         <h2 className="text-4xl font-light tracking-tight">
-                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'chat' ? 'Dialogue' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : 'Configuration'}
+                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : 'Configuration'}
                         </h2>
                         <p className="text-gray-400 mt-2 text-sm">
-                            {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : 'Managing the brand\'s digital presence'}
+                            {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : activeTab === 'auth' ? 'Gestion des visuels d\'authentification' : 'Managing the brand\'s digital presence'}
                         </p>
                     </div>
                     <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
@@ -326,10 +336,11 @@ export default function AdminDashboard() {
                     {activeTab === "cms" && <CMSManager />}
                     {activeTab === "newsletter" && <NewsletterManager />}
                     {activeTab === "categories" && <CategoryManager />}
-                    {activeTab === "chat" && <ChatManager />}
                     {activeTab === "orders" && <OrderManager />}
                     {activeTab === "settings" && <SettingsManager />}
+                    {activeTab === "help" && <HelpContentManager />}
                     {activeTab === "accounting" && <AccountingManager />}
+                    {activeTab === "auth" && <AuthExperienceManager />}
                 </section>
             </div>
         </div>
@@ -346,7 +357,7 @@ function ProductManager() {
     const [customColor, setCustomColor] = useState({ name: "", hex: "#000000" });
     const [customSize, setCustomSize] = useState("");
 
-    const fetchData = async () => {
+    const fetchData = async (isInitial = false) => {
         setLoading(true);
         const res = await fetch('/api/graphql', {
             method: 'POST',
@@ -401,14 +412,14 @@ function ProductManager() {
         setIsSavingProduct(true);
         try {
             const isEditing = !!editingId;
-            
+
             // Auto-add current custom color if it has a name but wasn't clicked "Ajouter"
             let finalColors = [...newProduct.colors];
             if (customColor.name && !finalColors.some(c => c.name === customColor.name)) {
                 finalColors.push({ ...customColor });
             }
 
-            const mutation = isEditing 
+            const mutation = isEditing
                 ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
                     updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
                 }`
@@ -493,9 +504,9 @@ function ProductManager() {
                                     <td className="px-10 py-6">
                                         <div className="flex items-center gap-5">
                                             <div className="w-16 h-20 bg-gray-100 flex-shrink-0 relative overflow-hidden group-hover:shadow-md transition-shadow">
-                                                <img 
-                                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/jewelry.png")} 
-                                                    className="object-cover w-full h-full" 
+                                                <img
+                                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/jewelry.png")}
+                                                    className="object-cover w-full h-full"
                                                     alt={p.name}
                                                 />
                                             </div>
@@ -511,7 +522,7 @@ function ProductManager() {
                                             {p.stock <= 0 ? 'RUPTURE' : `${p.stock} unités`}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-6 text-sm text-gray-500">€{p.price}</td>
+                                    <td className="px-6 py-6 text-sm text-gray-500">TND{p.price}</td>
                                     <td className="px-6 py-6">
                                         <div className="flex gap-1">
                                             {p.colors?.map((c: any) => (
@@ -529,10 +540,10 @@ function ProductManager() {
                                             <button
                                                 onClick={async () => {
                                                     setEditingId(p.id);
-                                                    
+
                                                     // Fetch full images for the product when editing to avoid loading them in the list
                                                     let fullImages = (p.images && Array.isArray(p.images) && p.images.length > 0) ? p.images : (p.image_url ? [p.image_url] : []);
-                                                    
+
                                                     try {
                                                         const res = await fetch('/api/graphql', {
                                                             method: 'POST',
@@ -640,7 +651,7 @@ function ProductManager() {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Prix (€)</label>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Prix (TND)</label>
                                         <input
                                             required type="number" step="0.01"
                                             className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
@@ -1059,7 +1070,7 @@ function CMSManager() {
                                             <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase">{item.key.replace(/_/g, ' ')}</label>
                                             <div className="flex gap-2">
                                                 {section === 'instagram' && (
-                                                    <button 
+                                                    <button
                                                         onClick={async () => {
                                                             if (confirm("Supprimer cet emplacement Instagram ?")) {
                                                                 await fetch('/api/graphql', {
@@ -1176,7 +1187,7 @@ function CMSManager() {
                                 ))}
 
                                 {section === 'instagram' && (
-                                    <button 
+                                    <button
                                         onClick={async () => {
                                             const nextIdx = content.filter(i => i.section === 'instagram').length + 1;
                                             await fetch('/api/graphql', {
@@ -1256,6 +1267,153 @@ function CMSManager() {
         </div>
     );
 }
+function HelpContentManager() {
+    const [content, setContent] = useState<Record<string, string>>({});
+    const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [activeSection, setActiveSection] = useState("about");
+
+    const sections = [
+        { id: "about", label: "About", keyTitle: "HELP_ABOUT_TITLE", keyBody: "HELP_ABOUT_BODY" },
+        { id: "shipping", label: "Shipping", keyTitle: "HELP_SHIPPING_TITLE", keyBody: "HELP_SHIPPING_BODY" },
+        { id: "materials", label: "Materials & Care", keyTitle: "HELP_MATERIALS_TITLE", keyBody: "HELP_MATERIALS_BODY" },
+        { id: "returns", label: "Returns", keyTitle: "HELP_RETURNS_TITLE", keyBody: "HELP_RETURNS_BODY" },
+        { id: "contact", label: "Contact", keyTitle: "HELP_CONTACT_TITLE", keyBody: "HELP_CONTACT_BODY" },
+        { id: "privacy", label: "Privacy Policy", keyTitle: "HELP_PRIVACY_TITLE", keyBody: "HELP_PRIVACY_BODY" },
+    ];
+
+    const fetchContent = () => {
+        setLoading(true);
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ homeContent { key value } }' })
+        })
+            .then(res => res.json())
+            .then(data => {
+                const cMap: Record<string, string> = {};
+                (data.data?.homeContent || []).forEach((item: any) => {
+                    cMap[item.key] = item.value;
+                });
+                setContent(cMap);
+                setLoading(false);
+            });
+    };
+
+    useEffect(() => { fetchContent(); }, []);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const section = sections.find(s => s.id === activeSection);
+        if (!section) return;
+
+        try {
+            const keysToUpdate = [
+                { key: section.keyTitle, value: content[section.keyTitle] || "" },
+                { key: section.keyBody, value: content[section.keyBody] || "" }
+            ];
+
+            for (const item of keysToUpdate) {
+                await fetch('/api/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: `mutation($key: String!, $value: String!, $type: String!, $section: String) { 
+                            updateHomeContent(key: $key, value: $value, type: $type, section: $section) { key } 
+                        }`,
+                        variables: {
+                            key: item.key,
+                            value: item.value,
+                            type: "TEXT",
+                            section: "HELP"
+                        }
+                    })
+                });
+            }
+            Swal.fire({ icon: 'success', title: 'Enregistré', text: 'Contenu mis à jour avec succès !', confirmButtonColor: '#000' });
+        } catch (e) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: 'Erreur lors de la sauvegarde.', confirmButtonColor: '#000' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (loading) return <div className="p-20 text-center text-gray-300 font-light tracking-widest uppercase">Chargement du contenu...</div>;
+
+    const currentSection = sections.find(s => s.id === activeSection)!;
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <aside className="lg:col-span-4 space-y-4">
+                <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl">
+                    <h3 className="text-xl font-light mb-8">Sections Information</h3>
+                    <div className="space-y-2">
+                        {sections.map((s) => (
+                            <button
+                                key={s.id}
+                                onClick={() => setActiveSection(s.id)}
+                                className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all ${activeSection === s.id ? 'bg-black text-white shadow-xl' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
+                            >
+                                <span className="text-[11px] font-bold uppercase tracking-widest">{s.label}</span>
+                                <ChevronRight size={14} className={activeSection === s.id ? "opacity-100" : "opacity-0"} />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </aside>
+
+            <main className="lg:col-span-8">
+                <div className="bg-white rounded-[3rem] p-12 border border-gray-100 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
+                        <FileText size={200} />
+                    </div>
+
+                    <div className="relative z-10">
+                        <div className="mb-12">
+                            <h3 className="text-2xl font-light tracking-tight">Modifier : {currentSection.label}</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-2">Personnalisez le contenu de cette page</p>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-black/40 ml-1">Titre de la section</label>
+                                <input
+                                    type="text"
+                                    value={content[currentSection.keyTitle] || ""}
+                                    onChange={(e) => setContent({ ...content, [currentSection.keyTitle]: e.target.value })}
+                                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl border border-transparent focus:border-black focus:bg-white outline-none transition-all text-sm font-medium"
+                                    placeholder="ex: À propos de Seaura"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-black/40 ml-1">Contenu (Texte / HTML)</label>
+                                <textarea
+                                    value={content[currentSection.keyBody] || ""}
+                                    onChange={(e) => setContent({ ...content, [currentSection.keyBody]: e.target.value })}
+                                    className="w-full h-64 p-6 bg-gray-50 rounded-3xl border border-transparent focus:border-black focus:bg-white outline-none transition-all text-sm font-medium resize-none leading-relaxed"
+                                    placeholder="Écrivez le contenu ici..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-12 pt-10 border-t border-gray-50 flex justify-end">
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className={`h-16 px-12 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] transition-all flex items-center gap-4 ${isSaving ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-black text-white hover:scale-105 shadow-2xl shadow-black/20'}`}
+                            >
+                                {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
+                                {isSaving ? 'Enregistrement...' : 'Sauvegarder la Section'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+}
+
 
 function NewsletterManager() {
     const [emails, setEmails] = useState<any[]>([]);
@@ -1446,7 +1604,7 @@ function NewsletterManager() {
                                 <div className="space-y-6">
                                     <div className="flex justify-between items-center mb-2">
                                         <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-black/20">Recipients ({selectedUsers.length})</h4>
-                                        <button 
+                                        <button
                                             onClick={() => setSelectedUsers(selectedUsers.length === emails.length ? [] : emails.map(e => e.email))}
                                             className="text-[9px] font-bold uppercase tracking-widest text-black/40 hover:text-black"
                                         >
@@ -1455,8 +1613,8 @@ function NewsletterManager() {
                                     </div>
                                     <div className="space-y-2 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
                                         {emails.map((entry) => (
-                                            <div 
-                                                key={entry.id} 
+                                            <div
+                                                key={entry.id}
                                                 onClick={() => toggleUser(entry.email)}
                                                 className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all border ${selectedUsers.includes(entry.email) ? 'bg-black text-white border-black shadow-lg shadow-black/10' : 'bg-gray-50 text-gray-500 border-transparent hover:border-gray-200'}`}
                                             >
@@ -1490,12 +1648,12 @@ function NewsletterManager() {
                                                 <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
                                             </label>
                                         </div>
-                                        
+
                                         <div className="grid grid-cols-4 gap-2">
                                             {uploadedImages.map((img, idx) => (
                                                 <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group border border-gray-100">
                                                     <img src={img} className="w-full h-full object-cover" />
-                                                    <button 
+                                                    <button
                                                         onClick={() => removeImage(idx)}
                                                         className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                     >
@@ -1591,7 +1749,7 @@ function CategoryManager() {
                     })
                 });
                 fetchCategories();
-            } catch (error) {}
+            } catch (error) { }
         };
         reader.readAsDataURL(file);
     };
@@ -1608,7 +1766,7 @@ function CategoryManager() {
                 })
             });
             fetchCategories();
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const handleDeleteSub = async (id: string) => {
@@ -1623,7 +1781,7 @@ function CategoryManager() {
                 })
             });
             fetchCategories();
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const handleDelete = async (id: string) => {
@@ -1672,9 +1830,9 @@ function CategoryManager() {
                                         <span className="text-[8px] font-black uppercase tracking-widest">Upload Image</span>
                                     </div>
                                 )}
-                                <input 
-                                    type="file" 
-                                    className="hidden" 
+                                <input
+                                    type="file"
+                                    className="hidden"
                                     accept="image/*"
                                     onChange={(e) => {
                                         const file = e.target.files?.[0];
@@ -1725,9 +1883,9 @@ function CategoryManager() {
                                             <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
                                                 <RefreshCcw size={14} className="text-white" />
                                             </div>
-                                            <input 
-                                                type="file" 
-                                                className="hidden" 
+                                            <input
+                                                type="file"
+                                                className="hidden"
                                                 accept="image/*"
                                                 onChange={(e) => {
                                                     const file = e.target.files?.[0];
@@ -1760,16 +1918,16 @@ function CategoryManager() {
                                             </div>
                                         ))}
                                     </div>
-                                    
+
                                     <div className="relative max-w-xs">
-                                        <input 
+                                        <input
                                             type="text"
                                             placeholder="+ Ajouter sous-catégorie"
                                             className="w-full bg-white border border-gray-100 rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest focus:border-black outline-none transition-all pr-12"
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter') {
-                                                  handleAddSub(cat.id, (e.target as HTMLInputElement).value);
-                                                  (e.target as HTMLInputElement).value = "";
+                                                    handleAddSub(cat.id, (e.target as HTMLInputElement).value);
+                                                    (e.target as HTMLInputElement).value = "";
                                                 }
                                             }}
                                         />
@@ -1784,192 +1942,16 @@ function CategoryManager() {
         </div>
     );
 }
-function ChatManager() {
-    const [sessions, setSessions] = useState<any[]>([]);
-    const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-    const [messages, setMessages] = useState<any[]>([]);
-    const [input, setInput] = useState("");
-    const [loading, setLoading] = useState(true);
-
-    const fetchSessions = () => {
-        fetch('/api/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: '{ chatSessions { id user_email created_at } }' })
-        })
-            .then(res => res.json())
-            .then(data => {
-                setSessions(data.data?.chatSessions || []);
-                setLoading(false);
-            });
-    };
-
-    const fetchMessages = () => {
-        if (!selectedEmail) return;
-        fetch('/api/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: `query($email: String!) { chatHistory(email: $email) { id content sender_role created_at } }`,
-                variables: { email: selectedEmail }
-            })
-        })
-            .then(res => res.json())
-            .then(data => {
-                setMessages(data.data?.chatHistory || []);
-            });
-    };
-
-    useEffect(() => { fetchSessions(); }, []);
-    useEffect(() => {
-        if (selectedEmail) {
-            fetchMessages();
-            const interval = setInterval(fetchMessages, 3000);
-            return () => clearInterval(interval);
-        }
-    }, [selectedEmail]);
-
-    const handleSend = async () => {
-        if (!input.trim() || !selectedEmail) return;
-        try {
-            await fetch('/api/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: `mutation($email: String!, $content: String!, $role: String!) { 
-            sendChatMessage(email: $email, content: $content, role: $role) { id }
-          }`,
-                    variables: { email: selectedEmail, content: input, role: 'ADMIN' }
-                })
-            });
-            setInput("");
-            fetchMessages();
-        } catch (error) { console.error(error); }
-    };
-
-    const handleDeleteSession = async (email: string) => {
-        if (!window.confirm(`Supprimer définitivement la conversation avec ${email} ?`)) return;
-        try {
-            await fetch('/api/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: `mutation($email: String!) { deleteChatSession(email: $email) }`,
-                    variables: { email }
-                })
-            });
-            if (selectedEmail === email) setSelectedEmail(null);
-            fetchSessions();
-        } catch (error) { console.error(error); }
-    };
-
-    if (loading) return <div className="p-20 text-center text-gray-300 font-light tracking-[0.3em] uppercase">Initialisation du Centre de Dialogue...</div>;
-
-    return (
-        <div className="flex h-[calc(100vh-250px)] bg-white rounded-[3rem] border border-gray-100 shadow-2xl overflow-hidden">
-            {/* Session Sidebar */}
-            <div className="w-80 border-r border-gray-50 flex flex-col bg-gray-50/30">
-                <div className="p-8 border-b border-gray-50 bg-white/50 backdrop-blur-md">
-                    <h3 className="text-lg font-light tracking-tight">Conversations</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                    {sessions.map(s => (
-                        <div
-                            key={s.id}
-                            className={`group w-full p-4 hover:bg-white transition-all flex items-center gap-4 border-b border-gray-50/50 cursor-pointer ${selectedEmail === s.user_email ? 'bg-white shadow-sm border-l-4 border-l-black' : ''}`}
-                            onClick={() => setSelectedEmail(s.user_email)}
-                        >
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
-                                <UserIcon size={18} />
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <p className="text-[11px] font-bold text-gray-800 truncate">{s.user_email}</p>
-                                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-tighter">
-                                    Initié le {s.created_at ? new Date(s.created_at).toLocaleDateString() : 'N/A'}
-                                </p>
-                            </div>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.user_email); }}
-                                className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all"
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                    ))}
-                    {sessions.length === 0 && (
-                        <div className="p-10 text-center text-gray-300 italic text-sm">Aucune session active</div>
-                    )}
-                </div>
-            </div>
-
-            {/* Chat Area */}
-            <div className="flex-1 flex flex-col bg-white">
-                {selectedEmail ? (
-                    <>
-                        <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                            <div>
-                                <h4 className="text-sm font-bold tracking-tight">{selectedEmail}</h4>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                    <span className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Client en ligne</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 p-10 overflow-y-auto flex flex-col gap-6 custom-scrollbar bg-gray-50/20">
-                            {messages.map(m => (
-                                <div key={m.id} className={`flex flex-col ${m.sender_role === 'ADMIN' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`max-w-[70%] p-5 rounded-3xl text-sm font-medium ${m.sender_role === 'ADMIN' ? 'bg-black text-white rounded-tr-none shadow-xl shadow-black/10' : 'bg-white text-black border border-gray-100 rounded-tl-none shadow-sm'}`}>
-                                        {m.content}
-                                    </div>
-                                    <span className="text-[9px] font-black text-gray-300 mt-3 uppercase tracking-widest">
-                                        {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-8 border-t border-gray-50 bg-white">
-                            <div className="flex gap-4 items-center bg-gray-50 p-2 rounded-[2rem] border border-gray-100">
-                                <input
-                                    type="text"
-                                    className="flex-1 bg-transparent border-none outline-none px-6 text-sm font-medium"
-                                    placeholder="Répondre au client..."
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all shadow-lg"
-                                >
-                                    <Send size={18} />
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-20">
-                        <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
-                            <MessageCircle size={32} className="text-gray-200" />
-                        </div>
-                        <h4 className="text-2xl font-light text-gray-400">Canal de Dialogue SEAURA</h4>
-                        <p className="text-gray-300 mt-4 max-w-sm text-sm">Sélectionnez une conversation pour initier une consultation artisanale en direct.</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
 
 
 function OrderManager() {
     const [orders, setOrders] = useState<any[]>([]);
     const [activeCarts, setActiveCarts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [paymentFilter, setPaymentFilter] = useState<'PAID' | 'UNPAID'>('UNPAID');
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (isInitial = false) => {
+        if (isInitial) setLoading(true);
         try {
             const res = await fetch('/api/graphql', {
                 method: 'POST',
@@ -1988,15 +1970,15 @@ function OrderManager() {
             }
             if (data.data?.orders) setOrders(data.data.orders);
             if (data.data?.activeCarts) setActiveCarts(data.data.activeCarts);
-        } catch (err: any) { 
+        } catch (err: any) {
             console.error("Fetch error:", err);
         }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { 
-        fetchData();
-        const interval = setInterval(fetchData, 10000); // Rafraîchir toutes les 10 secondes
+    useEffect(() => {
+        fetchData(true);
+        const interval = setInterval(() => fetchData(false), 10000); // Background refresh every 10 seconds
         return () => clearInterval(interval);
     }, []);
 
@@ -2072,19 +2054,19 @@ function OrderManager() {
                         (activeCarts || []).map((cart: any) => {
                             if (!cart) return null;
                             let items = [];
-                            try { 
+                            try {
                                 items = typeof cart.items === 'string' ? JSON.parse(cart.items) : (cart.items || []);
                                 if (!Array.isArray(items)) items = [];
                             } catch (e) { items = []; }
-                            
+
                             const total = items.reduce((sum: number, it: any) => {
                                 const p = parseFloat(it.price || 0);
                                 return sum + (isNaN(p) ? 0 : p);
                             }, 0);
-                            
+
                             return (
                                 <div key={cart.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-xl group hover:-translate-y-2 transition-all duration-500 relative">
-                                    <button 
+                                    <button
                                         onClick={() => handleDeleteActiveCart(cart.session_id)}
                                         className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all z-10"
                                         title="Supprimer la session"
@@ -2099,10 +2081,10 @@ function OrderManager() {
                                     </div>
                                     <div className="space-y-4">
                                         {items.length === 0 ? (
-                                             <p className="text-[10px] italic text-gray-300">Exploration en cours (Sac vide)</p>
+                                            <p className="text-[10px] italic text-gray-300">Exploration en cours (Sac vide)</p>
                                         ) : items.map((item: any, i: number) => (
                                             <div key={i} className="flex gap-4 items-center border-b border-gray-50 pb-4 last:border-none last:pb-0">
-                                                <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-[10px] font-bold">{i+1}</div>
+                                                <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-[10px] font-bold">{i + 1}</div>
                                                 <div>
                                                     <p className="text-sm font-bold tracking-tight">{item.name || 'Produit'}</p>
                                                     <p className="text-[9px] uppercase font-black tracking-widest text-gray-400">{item.selectedSize || 'Unique'} — {item.selectedColor || 'Par défaut'}</p>
@@ -2112,7 +2094,7 @@ function OrderManager() {
                                     </div>
                                     <div className="mt-8 pt-6 border-t border-gray-50 flex justify-between items-end">
                                         <p className="text-[9px] font-black uppercase tracking-widest text-black/20">Estimation</p>
-                                        <p className="text-2xl font-light tracking-tighter">{total.toFixed(2)} €</p>
+                                        <p className="text-2xl font-light tracking-tighter">{total.toFixed(2)} TND</p>
                                     </div>
                                 </div>
                             );
@@ -2123,23 +2105,40 @@ function OrderManager() {
 
             {/* Confirmed Orders Section */}
             <div>
-                <div className="flex items-center gap-4 mb-8">
-                    <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center shadow-lg">
-                        <ShoppingBag size={16} />
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center shadow-lg">
+                            <ShoppingBag size={16} />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-light tracking-tight">Commandes Finalisées</h3>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Historique des ventes confirmées</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-xl font-light tracking-tight">Commandes Finalisées</h3>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Historique des ventes confirmées</p>
+
+                    <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-2">
+                        <button
+                            onClick={() => setPaymentFilter('UNPAID')}
+                            className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentFilter === 'UNPAID' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                        >
+                            Non Payée
+                        </button>
+                        <button
+                            onClick={() => setPaymentFilter('PAID')}
+                            className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentFilter === 'PAID' ? 'bg-black text-white shadow-lg shadow-black/20' : 'text-gray-400 hover:text-black'}`}
+                        >
+                            Payée
+                        </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-8">
-                    {orders.length === 0 ? (
+                    {orders.filter(o => o.payment_status === paymentFilter).length === 0 ? (
                         <div className="bg-white rounded-[3rem] p-20 text-center border border-gray-100 italic text-gray-300 font-light">
-                            Aucune commande confirmée à ce jour.
+                            Aucune commande {paymentFilter === 'PAID' ? 'payée' : 'non payée'} à ce jour.
                         </div>
                     ) : (
-                        orders.map((order) => (
+                        orders.filter(o => o.payment_status === paymentFilter).map((order) => (
                             <div key={order.id} className="bg-white rounded-[3rem] p-12 border border-blue-50/50 shadow-2xl shadow-blue-50/20 overflow-hidden group hover:shadow-black/5 transition-all duration-700 relative">
                                 <div className="flex flex-col lg:flex-row justify-between items-start gap-12">
                                     <div className="flex-1 space-y-6">
@@ -2149,7 +2148,7 @@ function OrderManager() {
                                             <div className={`px-6 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${order.status === 'COMPLETED' ? 'bg-green-50 border-green-100 text-green-600 shadow-sm shadow-green-100' : 'bg-orange-50 border-orange-100 text-orange-600 animate-pulse'}`}>
                                                 {order.status === 'COMPLETED' ? 'LIVRÉE' : 'EN PRÉPARATION'}
                                             </div>
-                                            <button 
+                                            <button
                                                 onClick={() => updatePaymentStatus(order.id, order.payment_status === 'PAID' ? 'UNPAID' : 'PAID')}
                                                 className={`px-6 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all duration-500 flex items-center gap-2 ${order.payment_status === 'PAID' ? 'bg-black text-white border-black' : 'bg-white text-gray-400 border-gray-100 hover:border-black hover:text-black'}`}
                                             >
@@ -2157,54 +2156,54 @@ function OrderManager() {
                                                 {order.payment_status === 'PAID' ? 'PAYÉE' : 'MARQUER COMME PAYÉE'}
                                             </button>
                                         </div>
-                                        
+
                                         <div>
                                             <h3 className="text-4xl font-light tracking-tight group-hover:translate-x-4 transition-transform duration-700">{order.customer_email}</h3>
                                             <div className="text-gray-400 font-bold uppercase tracking-[0.2em] text-[11px] mt-3 flex items-center gap-3">
                                                 <div className="w-2 h-2 bg-black rounded-full" /> {order.customer_phone}
                                             </div>
                                         </div>
-                                        
+
                                         <div className="mt-12 pt-12 border-t border-gray-50 space-y-4">
                                             <h4 className="text-[10px] font-black uppercase tracking-[0.5em] text-black/10 mb-6 italic">Articles commandés</h4>
                                             {order.items?.map((item: any, idx: number) => (
                                                 <div key={idx} className="flex justify-between items-center py-6 border-b border-gray-50 last:border-none group/item hover:bg-gray-50/50 px-4 rounded-2xl transition-all">
                                                     <div className="flex items-center gap-6">
-                                                      <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 font-bold text-lg">
-                                                        {idx + 1}
-                                                      </div>
-                                                      <div>
-                                                          <p className="font-bold text-lg tracking-tight group-hover/item:text-blue-600 transition-colors uppercase">{item.product_name}</p>
-                                                          <div className="flex gap-4 mt-1.5 translate-y-2 opacity-0 group-hover/item:translate-y-0 group-hover/item:opacity-100 transition-all duration-500">
-                                                            <span className="text-[10px] uppercase font-black tracking-widest bg-gray-100 px-3 py-1 rounded-full text-gray-500">Taille: {item.size}</span>
-                                                            <span className="text-[10px] uppercase font-black tracking-widest bg-gray-100 px-3 py-1 rounded-full text-gray-500">Couleur: {item.color}</span>
-                                                          </div>
-                                                      </div>
+                                                        <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 font-bold text-lg">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-lg tracking-tight group-hover/item:text-blue-600 transition-colors uppercase">{item.product_name}</p>
+                                                            <div className="flex gap-4 mt-1.5 translate-y-2 opacity-0 group-hover/item:translate-y-0 group-hover/item:opacity-100 transition-all duration-500">
+                                                                <span className="text-[10px] uppercase font-black tracking-widest bg-gray-100 px-3 py-1 rounded-full text-gray-500">Taille: {item.size}</span>
+                                                                <span className="text-[10px] uppercase font-black tracking-widest bg-gray-100 px-3 py-1 rounded-full text-gray-500">Couleur: {item.color}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="font-black text-xl tracking-tighter">{item.price} €</p>
+                                                        <p className="font-black text-xl tracking-tighter">{item.price} TND</p>
                                                         <p className="text-[9px] uppercase font-black tracking-widest text-black/20 mt-1">Quantité: {item.quantity}</p>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    
+
                                     <div className="w-full lg:w-80 bg-gray-50/50 rounded-[2.5rem] p-10 flex flex-col justify-between gap-12 border border-gray-100 backdrop-blur-sm group-hover:bg-white transition-colors duration-700 shadow-inner">
                                         <div className="space-y-2">
                                             <p className="text-[9px] font-black uppercase tracking-[0.5em] text-black/20 italic">Montant Total</p>
-                                            <p className="text-6xl font-light tracking-tighter group-hover:scale-110 transition-transform duration-700 origin-left">{order.total}<span className="text-2xl ml-2 tracking-normal uppercase">€</span></p>
+                                            <p className="text-6xl font-light tracking-tighter group-hover:scale-110 transition-transform duration-700 origin-left">{order.total}<span className="text-2xl ml-2 tracking-normal uppercase">TND</span></p>
                                         </div>
                                         <div className="space-y-4">
                                             {order.status === 'PENDING' ? (
-                                                <button 
+                                                <button
                                                     onClick={() => updateStatus(order.id, 'COMPLETED')}
                                                     className="w-full h-16 bg-black text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-black/20 flex items-center justify-center gap-4 group/btn"
                                                 >
                                                     <Save size={18} className="group-hover/btn:rotate-12 transition-transform" /> Confirmer Livraison
                                                 </button>
                                             ) : (
-                                                <button 
+                                                <button
                                                     onClick={() => updateStatus(order.id, 'PENDING')}
                                                     className="w-full h-16 bg-gray-100 text-gray-400 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all duration-500 flex items-center justify-center gap-4"
                                                 >
@@ -2231,8 +2230,8 @@ function AccountingManager() {
     const [showSalesModal, setShowSalesModal] = useState(false);
     const [newCharge, setNewCharge] = useState({ description: "", amount: "", category: "Stock", date: new Date().toISOString().split('T')[0] });
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (isInitial = false) => {
+        if (isInitial) setLoading(true);
         try {
             const res = await fetch('/api/graphql', {
                 method: 'POST',
@@ -2251,7 +2250,7 @@ function AccountingManager() {
         }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { fetchData(true); }, []);
 
     const totalRevenue = orders
         .filter(o => o.payment_status === 'PAID')
@@ -2299,7 +2298,7 @@ function AccountingManager() {
         <div className="space-y-12 pb-20">
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div 
+                <div
                     onClick={() => setShowSalesModal(true)}
                     className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all cursor-pointer"
                 >
@@ -2307,7 +2306,7 @@ function AccountingManager() {
                         <TrendingUp size={40} className="text-green-500 opacity-20" />
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Chiffre d'Affaires (Payé)</p>
-                    <h3 className="text-4xl font-light">{totalRevenue.toLocaleString()} €</h3>
+                    <h3 className="text-4xl font-light">{totalRevenue.toLocaleString()} TND</h3>
                     <div className="mt-6 flex items-center gap-2 text-green-500 font-bold text-[10px]">
                         <Plus size={12} /> VOIR DÉTAIL DES VENTES
                     </div>
@@ -2318,7 +2317,7 @@ function AccountingManager() {
                         <TrendingDown size={40} className="text-red-500 opacity-20" />
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Total des Charges</p>
-                    <h3 className="text-4xl font-light">{totalExpenses.toLocaleString()} €</h3>
+                    <h3 className="text-4xl font-light">{totalExpenses.toLocaleString()} TND</h3>
                     <div className="mt-6 flex items-center gap-2 text-red-500 font-bold text-[10px]">
                         <Minus size={12} /> DÉPENSÉ
                     </div>
@@ -2329,7 +2328,7 @@ function AccountingManager() {
                         <DollarSign size={40} className="text-white opacity-20" />
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 mb-2">Bénéfice Net</p>
-                    <h3 className="text-4xl font-light">{totalProfit.toLocaleString()} €</h3>
+                    <h3 className="text-4xl font-light">{totalProfit.toLocaleString()} TND</h3>
                     <div className="mt-6 flex items-center gap-2 text-white/60 font-bold text-[10px]">
                         <PieChart size={12} /> PERFORMANCE
                     </div>
@@ -2366,15 +2365,19 @@ function AccountingManager() {
                             {charges.map((c: any) => (
                                 <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="px-10 py-6 text-xs text-gray-400 font-medium">
-                                        {new Date(c.date).toLocaleDateString('fr-FR')}
+                                        {c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '—'}
                                     </td>
                                     <td className="px-6 py-6 font-medium text-sm">{c.description}</td>
                                     <td className="px-6 py-6">
-                                        <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 px-3 py-1.5 rounded-full text-gray-500">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${c.category === 'Stock' ? 'bg-blue-50 text-blue-600' :
+                                            c.category === 'Marketing' ? 'bg-purple-50 text-purple-600' :
+                                                c.category === 'Services' ? 'bg-orange-50 text-orange-600' :
+                                                    'bg-gray-100 text-gray-500'
+                                            }`}>
                                             {c.category || "Autre"}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-6 text-sm font-bold text-red-500">-{c.amount} €</td>
+                                    <td className="px-6 py-6 text-sm font-bold text-red-500">-{c.amount} TND</td>
                                     <td className="px-10 py-6 text-right">
                                         <button onClick={() => handleDeleteCharge(c.id)} className="p-3 hover:bg-red-50 text-red-300 hover:text-red-500 transition-all rounded-full">
                                             <Trash2 size={16} />
@@ -2416,7 +2419,7 @@ function AccountingManager() {
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Montant (€)</label>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Montant (TND)</label>
                                     <input
                                         required type="number" step="0.01"
                                         className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
@@ -2481,7 +2484,9 @@ function AccountingManager() {
                                                 order.items?.map((item: any, idx: number) => (
                                                     <tr key={`${order.id}-${idx}`} className="group hover:bg-gray-50 transition-all rounded-2xl overflow-hidden shadow-sm shadow-black/5 bg-white border border-gray-50">
                                                         <td className="px-6 py-6 rounded-l-2xl text-[10px] font-bold text-gray-400">
-                                                            {new Date(order.created_at).toLocaleDateString('fr-FR')}
+                                                            {order.created_at && !isNaN(new Date(order.created_at).getTime())
+                                                                ? new Date(order.created_at).toLocaleDateString('fr-FR')
+                                                                : 'N/A'}
                                                         </td>
                                                         <td className="px-6 py-6 text-xs font-medium italic text-gray-500">
                                                             {order.customer_email}
@@ -2499,7 +2504,7 @@ function AccountingManager() {
                                                             x{item.quantity}
                                                         </td>
                                                         <td className="px-6 py-6 rounded-r-2xl text-right font-black text-sm tracking-tighter text-black">
-                                                            {item.price} €
+                                                            {item.price} TND
                                                         </td>
                                                     </tr>
                                                 ))
@@ -2514,7 +2519,7 @@ function AccountingManager() {
                                 </div>
                             )}
                         </div>
-                        
+
                         <div className="p-8 md:p-10 bg-gray-50/50 border-t border-gray-50 flex justify-between items-center px-8 md:px-12">
                             <p className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-black/20">Synthèse Global</p>
                             <div className="flex gap-8 md:gap-12">
@@ -2529,13 +2534,120 @@ function AccountingManager() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[7px] md:text-[8px] font-bold uppercase text-gray-400 mb-1">Chiffre d'Affaires</p>
-                                    <p className="text-lg md:text-xl font-bold tracking-tighter text-green-600">{totalRevenue.toLocaleString()} €</p>
+                                    <p className="text-lg md:text-xl font-bold tracking-tighter text-green-600">{totalRevenue.toLocaleString()} TND</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function AuthExperienceManager() {
+    const [images, setImages] = useState<Record<string, string>>({
+        auth_signin_image: "/images/clothing.png",
+        auth_signup_image: "/images/bags.png"
+    });
+    const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const fetchImages = () => {
+        setLoading(true);
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ homeContent { key value } }' })
+        })
+            .then(res => res.json())
+            .then(data => {
+                const imgMap: Record<string, string> = { ...images };
+                (data.data?.homeContent || []).forEach((item: any) => {
+                    if (item.key === 'auth_signin_image' || item.key === 'auth_signup_image') {
+                        imgMap[item.key] = item.value;
+                    }
+                });
+                setImages(imgMap);
+                setLoading(false);
+            });
+    };
+
+    useEffect(() => { fetchImages(); }, []);
+
+    const handleImageChange = (key: string, file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImages(prev => ({ ...prev, [key]: reader.result as string }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleSave = async (key: string) => {
+        setIsSaving(true);
+        try {
+            await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($key: String!, $value: String!, $type: String!, $section: String) { 
+                        updateHomeContent(key: $key, value: $value, type: $type, section: $section) { key } 
+                    }`,
+                    variables: { key, value: images[key], type: "IMAGE", section: "AUTH" }
+                })
+            });
+            Swal.fire({ icon: 'success', title: 'Succès', text: 'Image mise à jour !', confirmButtonColor: '#000' });
+        } catch (e) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: 'Échec de la sauvegarde.', confirmButtonColor: '#000' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (loading) return <div className="p-20 text-center text-gray-400 font-light tracking-[0.2em] uppercase animate-pulse">Chargement de l'expérience visuelle...</div>;
+
+    return (
+        <div className="space-y-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                {[
+                    { key: 'auth_signin_image', title: 'Page de Connexion', subtitle: 'Image latérale immersive (Sign In)' },
+                    { key: 'auth_signup_image', title: 'Page d\'Inscription', subtitle: 'Image latérale immersive (Sign Up)' }
+                ].map((item) => (
+                    <div key={item.key} className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-2xl relative overflow-hidden group">
+                        <div className="relative z-10 space-y-8">
+                            <div>
+                                <h3 className="text-xl font-light tracking-tight">{item.title}</h3>
+                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-2">{item.subtitle}</p>
+                            </div>
+
+                            <div className="relative aspect-[4/5] rounded-[2.5rem] overflow-hidden bg-gray-50 border-2 border-dashed border-gray-100 flex items-center justify-center group/img shadow-inner">
+                                <img src={images[item.key]} className="absolute inset-0 w-full h-full object-cover transition-transform duration-[10s] group-hover/img:scale-110" alt="Preview" />
+                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => e.target.files?.[0] && handleImageChange(item.key, e.target.files[0])}
+                                        className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                                    />
+                                    <div className="p-5 bg-white rounded-2xl shadow-2xl transform translate-y-4 group-hover/img:translate-y-0 transition-transform">
+                                        <Plus size={24} className="text-black" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => handleSave(item.key)}
+                                disabled={isSaving}
+                                className="w-full h-16 bg-black text-white rounded-full text-[11px] font-bold uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-black/20 flex items-center justify-center gap-3"
+                            >
+                                <Save size={16} /> Enregistrer ce visuel
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+
         </div>
     );
 }

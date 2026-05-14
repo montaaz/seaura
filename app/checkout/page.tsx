@@ -58,8 +58,8 @@ export default function CheckoutPage() {
         setIsLoaded(true);
     }, []);
 
-    const subtotal = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
-    const shipping = 8.0; 
+    const subtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
+    const shipping = 8.0;
     const total = subtotal + shipping;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -81,7 +81,7 @@ export default function CheckoutPage() {
                 price: parseFloat(item.price),
                 selectedSize: item.selectedSize || "Standard",
                 selectedColor: item.selectedColor || "N/A",
-                quantity: 1
+                quantity: item.quantity || 1
             }));
 
             const res = await fetch('/api/graphql', {
@@ -104,6 +104,31 @@ export default function CheckoutPage() {
 
             const data = await res.json();
             if (data.data?.createOrder) {
+                await Swal.fire({
+                    title: 'MERCI POUR VOTRE CONFIANCE',
+                    html: `
+                        <div style="padding: 10px;">
+                            <p style="font-size: 1.1rem; color: #555; font-style: italic; margin-bottom: 20px;">
+                                "L'art de l'élégance commence ici..."
+                            </p>
+                            <p style="margin-top: 10px; font-weight: 600; color: #000; letter-spacing: 1px; text-transform: uppercase; font-size: 0.9rem;">
+                                Votre commande a été enregistrée avec succès.
+                            </p>
+                        </div>
+                    `,
+                    icon: 'success',
+                    iconColor: '#C5A059',
+                    showConfirmButton: false,
+                    timer: 5000,
+                    timerProgressBar: true,
+                    background: '#FDFCF7',
+                    backdrop: 'rgba(0,0,0,0.8)',
+                    customClass: {
+                        popup: 'rounded-[4rem] border-none shadow-[0_50px_100px_rgba(0,0,0,0.3)] p-16',
+                        title: 'text-xl font-black tracking-[0.2em] text-black uppercase',
+                    }
+                });
+
                 setOrderSummary({
                     id: data.data.createOrder.id,
                     date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -127,9 +152,9 @@ export default function CheckoutPage() {
 
     return (
         <div className={styles.checkoutContainer}>
-            <Header 
+            <Header
                 categories={categories}
-                cartCount={cart.length} 
+                cartCount={cart.length}
                 wishlistCount={wishlist.length}
                 forceBlack={true}
             />
@@ -203,10 +228,10 @@ export default function CheckoutPage() {
                                     {orderSummary.items.map((item: any, idx: number) => (
                                         <tr key={idx}>
                                             <td>
-                                                {item.name} × 1
+                                                {item.name} × {item.quantity || 1}
                                                 <div className={styles.tableMeta}>• taille: {item.selectedSize}</div>
                                             </td>
-                                            <td>{item.price.toFixed(2)} TND</td>
+                                            <td>{(item.price * (item.quantity || 1)).toFixed(2)} TND</td>
                                         </tr>
                                     ))}
                                     <tr>
@@ -238,7 +263,7 @@ export default function CheckoutPage() {
                         {/* LEFT: BILLING DETAILS */}
                         <div className={styles.billingSection}>
                             <h2>Détails de facturation</h2>
-                            
+
                             <div className={styles.formGrid}>
                                 <div className={styles.formGroup}>
                                     <label>Prénom *</label>
@@ -248,7 +273,7 @@ export default function CheckoutPage() {
                                     <label>Nom *</label>
                                     <input type="text" name="lastName" required value={formData.lastName} onChange={handleInputChange} />
                                 </div>
-                                
+
                                 <div className={styles.formGroupFull}>
                                     <div className={styles.formGroup}>
                                         <label>Pays/région *</label>
@@ -264,7 +289,6 @@ export default function CheckoutPage() {
                                     <div className={styles.formGroup}>
                                         <label>Numéro et nom de rue *</label>
                                         <input type="text" name="address" placeholder="Numéro de voie et nom de la rue" required value={formData.address} onChange={handleInputChange} />
-                                        <input type="text" name="apartment" placeholder="Bâtiment, appartement, lot, etc. (facultatif)" value={formData.apartment} onChange={handleInputChange} style={{ marginTop: '10px' }} />
                                     </div>
                                 </div>
 
@@ -310,40 +334,27 @@ export default function CheckoutPage() {
                         {/* RIGHT: ORDER SUMMARY */}
                         <div className={styles.summarySection}>
                             <h2>Résumé de la commande</h2>
-                            
+
                             <div className={styles.summaryCard}>
                                 {cart.map((item, idx) => (
                                     <div key={idx} className={styles.orderItem}>
                                         <div className={styles.itemImage}>
-                                            <Image 
-                                                src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/placeholder.png")} 
-                                                alt={item.name} 
-                                                fill 
+                                            <Image
+                                                src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/placeholder.png")}
+                                                alt={item.name}
+                                                fill
                                                 className="object-cover"
                                             />
                                         </div>
                                         <div className={styles.itemInfo}>
-                                            <div className={styles.itemName}>{item.name} × 1</div>
+                                            <div className={styles.itemName}>{item.name} × {item.quantity || 1}</div>
                                             <div className={styles.itemMeta}>taille: {item.selectedSize}</div>
                                         </div>
-                                        <div className={styles.itemPrice}>{parseFloat(item.price).toFixed(2)} TND</div>
+                                        <div className={styles.itemPrice}>{(parseFloat(item.price) * (item.quantity || 1)).toFixed(2)} TND</div>
                                     </div>
                                 ))}
 
-                                <div className={styles.summaryActions}>
-                                    <button type="button" className={styles.actionBtn}>
-                                        <FileText size={18} />
-                                        Note
-                                    </button>
-                                    <button type="button" className={styles.actionBtn}>
-                                        <Truck size={18} />
-                                        Expédition
-                                    </button>
-                                    <button type="button" className={styles.actionBtn}>
-                                        <Tag size={18} />
-                                        Coupon
-                                    </button>
-                                </div>
+
 
                                 <div className={styles.totals}>
                                     <div className={styles.totalRow}>
@@ -362,8 +373,8 @@ export default function CheckoutPage() {
 
                                 <div className={styles.paymentSection}>
                                     <h3>Les informations de paiement</h3>
-                                    
-                                    <div 
+
+                                    <div
                                         className={`${styles.paymentBox} ${paymentAccepted ? styles.paymentBoxActive : ""}`}
                                         onClick={() => setPaymentAccepted(!paymentAccepted)}
                                     >
@@ -374,7 +385,7 @@ export default function CheckoutPage() {
                                     </div>
 
                                     <p className={styles.paymentDesc}>Payer en argent comptant à la livraison.</p>
-                                    
+
                                     <p className={styles.policyText}>
                                         Vos données personnelles seront utilisées pour le traitement de votre commande, vous accompagner au cours de votre visite du site web, et pour d'autres raisons décrites dans notre politique de confidentialité.
                                     </p>

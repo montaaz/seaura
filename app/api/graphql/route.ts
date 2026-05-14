@@ -302,7 +302,7 @@ const resolvers = {
     },
     charges: async (_: any, __: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
-      const res = await query("SELECT * FROM charges ORDER BY date DESC");
+      const res = await query("SELECT id, description, amount, category, TO_CHAR(date, 'YYYY-MM-DD') as date FROM charges ORDER BY date DESC");
       return res.rows;
     },
     searchProducts: async (_: any, { term }: any) => {
@@ -315,6 +315,7 @@ const resolvers = {
       );
       return res.rows.map((r: any) => ({
         ...r,
+        image_url: `/api/image/${r.id}`,
         images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
       }));
     },
@@ -396,7 +397,19 @@ const resolvers = {
         "UPDATE orders SET status = $1 WHERE id = $2 RETURNING *, created_at::text",
         [status, id]
       );
-      return res.rows[0];
+      const order = res.rows[0];
+
+      if (status === 'COMPLETED' && order) {
+        await query("UPDATE orders SET payment_status = 'PAID' WHERE id = $1", [id]);
+        order.payment_status = 'PAID';
+        const itemsRes = await query("SELECT product_id, quantity FROM order_items WHERE order_id = $1", [id]);
+        for (const item of itemsRes.rows) {
+          if (item.product_id) {
+            await query("UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2", [item.quantity, item.product_id]);
+          }
+        }
+      }
+      return order;
     },
     updateOrderPaymentStatus: async (_: any, { id, payment_status }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
