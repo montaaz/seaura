@@ -26,6 +26,7 @@ import {
     LayoutDashboard,
     Send,
     User as UserIcon,
+    Users,
     Calculator,
     TrendingUp,
     TrendingDown,
@@ -257,6 +258,14 @@ export default function AdminDashboard() {
                         <span className="text-xs uppercase font-bold tracking-[0.1em]">Commandes</span>
                     </button>
 
+                    <button
+                        onClick={() => { setActiveTab('clients'); setIsSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'clients' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
+                    >
+                        <Users size={20} />
+                        <span className="text-xs uppercase font-bold tracking-[0.1em]">Clients</span>
+                    </button>
+
 
                     <button
                         onClick={() => { setActiveTab('auth'); setIsSidebarOpen(false); }}
@@ -317,10 +326,10 @@ export default function AdminDashboard() {
                 <header className="flex justify-between items-end mb-12">
                     <div>
                         <h2 className="text-4xl font-light tracking-tight">
-                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : 'Configuration'}
+                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : activeTab === 'clients' ? 'Clients' : 'Configuration'}
                         </h2>
                         <p className="text-gray-400 mt-2 text-sm">
-                            {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : activeTab === 'auth' ? 'Gestion des visuels d\'authentification' : 'Managing the brand\'s digital presence'}
+                            {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : activeTab === 'auth' ? 'Gestion des visuels d\'authentification' : activeTab === 'clients' ? 'Gestion de la base de données clients' : 'Managing the brand\'s digital presence'}
                         </p>
                     </div>
                     <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
@@ -341,6 +350,7 @@ export default function AdminDashboard() {
                     {activeTab === "help" && <HelpContentManager />}
                     {activeTab === "accounting" && <AccountingManager />}
                     {activeTab === "auth" && <AuthExperienceManager />}
+                    {activeTab === "clients" && <ClientManager />}
                 </section>
             </div>
         </div>
@@ -2652,7 +2662,207 @@ function AuthExperienceManager() {
     );
 }
 
+function ClientManager() {
+    const [users, setUsers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const fetchUsers = () => {
+        setLoading(true);
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ users { id email role order_count created_at } }' })
+        })
+            .then(res => res.json())
+            .then(data => {
+                setUsers(data.data?.users || []);
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setLoading(false);
+            });
+    };
+
+    useEffect(() => { fetchUsers(); }, []);
+
+    const handleUpdatePassword = async (userId: string) => {
+        const { value: password } = await Swal.fire({
+            title: 'Sécurité Client',
+            html: `
+                <div class="p-4">
+                    <div class="relative group">
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-black/30 mb-4 text-left">Nouveau mot de passe</p>
+                        <input type="password" id="swal-input-password" 
+                            class="w-full h-16 px-6 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-black outline-none transition-all text-sm font-bold tracking-widest" 
+                            placeholder="••••••••••••">
+                        <div class="mt-6 flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                            <input type="checkbox" id="swal-show-password" class="w-5 h-5 rounded-lg border-gray-300 text-black focus:ring-black">
+                            <label for="swal-show-password" class="text-[10px] font-black uppercase tracking-widest text-gray-500 cursor-pointer">Rendre visible</label>
+                        </div>
+                    </div>
+                </div>
+            `,
+            didOpen: () => {
+                const input = document.getElementById('swal-input-password') as HTMLInputElement;
+                const toggle = document.getElementById('swal-show-password') as HTMLInputElement;
+                toggle?.addEventListener('change', () => {
+                    input.type = toggle.checked ? 'text' : 'password';
+                });
+            },
+            preConfirm: () => {
+                const val = (document.getElementById('swal-input-password') as HTMLInputElement).value;
+                if (!val) { Swal.showValidationMessage('Veuillez entrer un mot de passe'); return false; }
+                return val;
+            },
+            showCancelButton: true,
+            confirmButtonText: 'Mettre à jour',
+            cancelButtonText: 'Annuler',
+            buttonsStyling: false,
+            customClass: {
+                popup: 'rounded-[3rem] p-8 border border-gray-100 shadow-2xl',
+                title: 'text-3xl font-black tracking-tighter mb-4',
+                confirmButton: 'h-16 px-12 bg-black text-white rounded-full text-[11px] font-black uppercase tracking-[0.2em] hover:scale-105 transition-all shadow-xl shadow-black/20 mx-2',
+                cancelButton: 'h-16 px-12 bg-gray-100 text-gray-400 rounded-full text-[11px] font-black uppercase tracking-[0.2em] hover:bg-gray-200 transition-all mx-2'
+            }
+        });
+
+        if (password) {
+            try {
+                const res = await fetch('/api/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: `mutation($id: ID!, $password: String!) { updateUserPassword(id: $id, password: $password) }`,
+                        variables: { id: userId, password }
+                    })
+                });
+                const data = await res.json();
+                if (data.data?.updateUserPassword) {
+                    Swal.fire({ icon: 'success', title: 'Confirmé', text: 'Le mot de passe a été réinitialisé.', showConfirmButton: false, timer: 2000, customClass: { popup: 'rounded-[2rem]' } });
+                }
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    const filteredUsers = users.filter(u => 
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center p-32 space-y-6">
+            <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Initialisation de la base de données...</p>
+        </div>
+    );
+
+    const getGradient = (email: string) => {
+        const colors = [
+            'from-indigo-500 to-purple-500',
+            'from-emerald-500 to-teal-500',
+            'from-rose-500 to-orange-500',
+            'from-blue-500 to-cyan-500',
+            'from-amber-500 to-yellow-500'
+        ];
+        const idx = email.length % colors.length;
+        return colors[idx];
+    };
+
+    return (
+        <div className="space-y-12">
+            {/* Header / Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="md:col-span-2 bg-white rounded-[3rem] p-10 border border-gray-100 shadow-xl flex items-center gap-8 group">
+                    <div className="relative flex-1">
+                        <Users className="absolute left-6 top-1/2 -translate-y-1/2 text-black/10 group-hover:text-black/30 transition-colors" size={24} />
+                        <input
+                            type="text"
+                            placeholder="Rechercher un client..."
+                            className="w-full h-16 pl-16 pr-8 bg-gray-50 rounded-[2rem] border-2 border-transparent focus:border-black outline-none transition-all text-sm font-bold"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="bg-black rounded-[3rem] p-10 text-white shadow-2xl shadow-black/20 flex items-center justify-between">
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/40 mb-1">Total Active</p>
+                        <p className="text-4xl font-light tracking-tighter">{users.length}</p>
+                    </div>
+                    <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                        <UserIcon size={24} className="text-white" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Clients Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                {filteredUsers.map((user, idx) => (
+                    <div 
+                        key={user.id}
+                        className="group relative bg-white rounded-[3rem] border border-gray-100 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 overflow-hidden animate-in fade-in slide-in-from-bottom-8 fill-mode-both"
+                        style={{ animationDelay: `${idx * 100}ms` }}
+                    >
+                        {/* Card Header Gradient Background */}
+                        <div className={`h-24 bg-gradient-to-br ${getGradient(user.email)} opacity-5 group-hover:opacity-10 transition-opacity`} />
+                        
+                        <div className="px-10 pb-10 -mt-12 text-center">
+                            {/* Avatar */}
+                            <div className={`w-24 h-24 rounded-[2rem] bg-gradient-to-br ${getGradient(user.email)} mx-auto mb-6 flex items-center justify-center text-3xl font-light text-white shadow-2xl ring-8 ring-white group-hover:scale-110 transition-transform duration-500`}>
+                                {user.email[0].toUpperCase()}
+                            </div>
+
+                            {/* Info */}
+                            <div className="space-y-2 mb-8">
+                                <h4 className="text-lg font-black tracking-tight text-black truncate">{user.email.split('@')[0]}</h4>
+                                <p className="text-xs text-gray-400 font-medium truncate">{user.email}</p>
+                                <div className="flex items-center justify-center gap-2 mt-4">
+                                    <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-[0.2em] ${user.role === 'ADMIN' ? 'bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                        {user.role}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="grid grid-cols-2 gap-4 py-6 border-y border-gray-50 mb-8">
+                                <div className="text-center">
+                                    <p className="text-xl font-light tracking-tighter">{user.order_count}</p>
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-300">Commandes</p>
+                                </div>
+                                <div className="text-center border-l border-gray-50">
+                                    <p className="text-xs font-bold text-gray-400 mt-2">
+                                        {user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : 'Ancien'}
+                                    </p>
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-300">Membre</p>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <button
+                                onClick={() => handleUpdatePassword(user.id)}
+                                className="w-full h-14 bg-gray-50 hover:bg-black text-black hover:text-white rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 group/btn"
+                            >
+                                <RefreshCcw size={14} className="group-hover/btn:rotate-180 transition-transform duration-700" />
+                                Modifier l'accès
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {filteredUsers.length === 0 && (
+                <div className="py-32 text-center space-y-4">
+                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
+                        <Users size={32} className="text-gray-200" />
+                    </div>
+                    <p className="text-gray-300 font-medium italic">Aucun client ne correspond à votre recherche.</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function Minus({ size, className }: { size: number, className?: string }) {
     return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12" /></svg>;
 }
-

@@ -19,8 +19,8 @@ export async function POST(req: Request) {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         await query(
-            "INSERT INTO users (email, password, role) VALUES ($1, $2, $3)",
-            [email, hashedPassword, "CLIENT"] // Default to CLIENT
+            "INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4)",
+            [email, hashedPassword, name || null, "CLIENT"] // Default to CLIENT
         );
 
         return NextResponse.json({ message: "Success" }, { status: 201 });

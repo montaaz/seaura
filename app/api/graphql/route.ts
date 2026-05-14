@@ -5,12 +5,23 @@ import { query, initDb } from '@/lib/db';
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth';
 import { getServerSession } from "next-auth/next";
 import { sendEmail } from '@/lib/mail';
+import * as bcrypt from 'bcrypt';
 
 const typeDefs = gql`
   type User {
     id: ID!
     email: String!
     role: String!
+    name: String
+  }
+
+  type UserWithStats {
+    id: ID!
+    email: String!
+    role: String!
+    name: String
+    order_count: Int
+    created_at: String
   }
 
   type Category {
@@ -147,6 +158,7 @@ const typeDefs = gql`
     searchProducts(term: String!): [Product!]!
     product(id: ID!): Product
     subCategories(categoryId: ID): [SubCategory!]!
+    users: [UserWithStats!]!
   }
 
   type Mutation {
@@ -173,11 +185,22 @@ const typeDefs = gql`
     updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
     deleteSubCategory(id: ID!): Boolean!
     deleteCart(sessionId: String!): Boolean!
+    updateUserPassword(id: ID!, password: String!): Boolean!
   }
 `;
 
 const resolvers = {
   Query: {
+    users: async (_: any, __: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(`
+        SELECT u.id, u.email, u.role, u.created_at::text,
+        (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id OR o.customer_email = u.email) as order_count
+        FROM users u
+        ORDER BY u.created_at DESC
+      `);
+      return res.rows;
+    },
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
@@ -541,6 +564,12 @@ const resolvers = {
     deleteSubCategory: async (_: any, { id }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       await query("DELETE FROM sub_categories WHERE id = $1", [id]);
+      return true;
+    },
+    updateUserPassword: async (_: any, { id, password }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await query("UPDATE users SET password = $1 WHERE id = $2", [hashedPassword, id]);
       return true;
     }
   }

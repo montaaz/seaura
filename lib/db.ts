@@ -7,7 +7,11 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-let isInitialized = false;
+// Ensure isInitialized persists in development mode across hot reloads
+const globalWithDb = globalThis as typeof globalThis & {
+  dbInitialized?: boolean;
+};
+
 const cache = new Map<string, { data: any, timestamp: number }>();
 const CACHE_TTL = 300000; // 5 minutes
 
@@ -36,7 +40,7 @@ export const query = async (text: string, params?: any[]) => {
 };
 
 export const initDb = async () => {
-  if (isInitialized) return;
+  if (globalWithDb.dbInitialized) return;
   try {
     const client = await pool.connect();
     
@@ -78,55 +82,21 @@ export const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      DO $$ 
-      BEGIN 
-        -- Schema Migrations
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='image_url' AND data_type='character varying') THEN
-          ALTER TABLE products ALTER COLUMN image_url TYPE TEXT;
-        END IF;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes JSONB DEFAULT '[]';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS colors JSONB DEFAULT '[]';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 10;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_category_id INTEGER REFERENCES sub_categories(id) ON DELETE SET NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS has_sizes BOOLEAN DEFAULT TRUE;
 
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sizes') THEN
-          ALTER TABLE products ADD COLUMN sizes JSONB DEFAULT '[]';
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='images') THEN
-          ALTER TABLE products ADD COLUMN images JSONB DEFAULT '[]';
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='colors') THEN
-          ALTER TABLE products ADD COLUMN colors JSONB DEFAULT '[]';
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='stock') THEN
-          ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 10;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='categories' AND column_name='image_url') THEN
-          ALTER TABLE categories ADD COLUMN image_url TEXT;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='sub_category_id') THEN
-          ALTER TABLE products ADD COLUMN sub_category_id INTEGER REFERENCES sub_categories(id) ON DELETE SET NULL;
-        END IF;
-
-        if NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='has_sizes') THEN
-          ALTER TABLE products ADD COLUMN has_sizes BOOLEAN DEFAULT TRUE;
-        END IF;
-
-        -- Order columns
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customer_email') THEN
-          ALTER TABLE orders ADD COLUMN customer_email VARCHAR(255);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customer_phone') THEN
-          ALTER TABLE orders ADD COLUMN customer_phone VARCHAR(50);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='address') THEN
-          ALTER TABLE orders ADD COLUMN address TEXT;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='city') THEN
-          ALTER TABLE orders ADD COLUMN city VARCHAR(255);
-        END IF;
-      END $$;
+      -- Order columns
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS city VARCHAR(255);
 
       CREATE TABLE IF NOT EXISTS home_content (
         id SERIAL PRIMARY KEY,
@@ -175,7 +145,7 @@ export const initDb = async () => {
     }
 
     client.release();
-    isInitialized = true;
+    globalWithDb.dbInitialized = true;
     console.log('Database optimizations applied successfully.');
   } catch (err) {
     console.error('Error during database optimization:', err);
