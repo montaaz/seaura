@@ -1008,6 +1008,19 @@ function CMSManager() {
             let success = true;
             for (const key of Object.keys(stagedChanges)) {
                 const item = stagedChanges[key];
+
+                // CRITICAL: never write an IMAGE value back if it's still the
+                // read-only proxy placeholder (/api/image/...). The editor loads
+                // IMAGE rows as proxy URLs (not the real base64), so publishing
+                // them would overwrite the stored image with the URL string and
+                // destroy the image. Only save IMAGE rows that were actually
+                // re-uploaded (a data: URL) or set to a real http/relative URL.
+                if (item.type === 'IMAGE') {
+                    const v = item.value || '';
+                    const isRealImage = v.startsWith('data:') || v.startsWith('http') || (v.startsWith('/') && !v.startsWith('/api/image/'));
+                    if (!isRealImage) continue; // untouched — skip
+                }
+
                 const res = await fetch('/api/graphql', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

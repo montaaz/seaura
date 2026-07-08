@@ -402,10 +402,22 @@ const resolvers = {
     },
     updateHomeContent: async (_: any, { key, value, type, section }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      // Server-side safety net: the editor loads IMAGE rows as read-only
+      // "/api/image/..." proxy URLs. If one of those is ever sent back as the
+      // value of an IMAGE row, writing it would overwrite the real stored image
+      // with the proxy URL string (self-referential) and destroy the image.
+      // Reject it and keep the existing value untouched.
+      if (type === 'IMAGE' && typeof value === 'string' && value.startsWith('/api/image/')) {
+        const existing = await query("SELECT * FROM home_content WHERE key = $1", [key]);
+        if (existing.rows[0]) return existing.rows[0];
+        throw new Error('Refusing to store a proxy URL as an image');
+      }
+
       const res = await query(
-        `INSERT INTO home_content (key, value, type, section) 
+        `INSERT INTO home_content (key, value, type, section)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (key) DO UPDATE 
+         ON CONFLICT (key) DO UPDATE
          SET value = EXCLUDED.value, type = EXCLUDED.type, section = EXCLUDED.section, updated_at = CURRENT_TIMESTAMP
          RETURNING *`,
         [key, value, type, section]
