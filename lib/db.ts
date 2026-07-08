@@ -4,7 +4,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
+  // Fail fast instead of holding a pooled connection for minutes.
+  // A single image query should never take more than a few seconds.
+  statement_timeout: 15000,
 });
 
 // Ensure isInitialized persists in development mode across hot reloads
@@ -12,31 +15,13 @@ const globalWithDb = globalThis as typeof globalThis & {
   dbInitialized?: boolean;
 };
 
-const cache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 300000; // 5 minutes
-
 export const query = async (text: string, params?: any[]) => {
-  const cacheKey = `${text}_${JSON.stringify(params || [])}`;
-  const now = Date.now();
-  
-  if (cache.has(cacheKey)) {
-    const cached = cache.get(cacheKey)!;
-    if (now - cached.timestamp < CACHE_TTL) {
-      return cached.data;
-    }
-  }
-
-  const result = await pool.query(text, params);
-  
-  // Only cache SELECT queries
-  if (text.trim().toUpperCase().startsWith('SELECT')) {
-    cache.set(cacheKey, { data: result, timestamp: now });
-  } else {
-    // Clear cache on mutations (INSERT/UPDATE/DELETE)
-    cache.clear();
-  }
-  
-  return result;
+  // No application-level query cache. It was a per-process in-memory Map, so
+  // each running instance (localhost vs. server) held its own stale copy and
+  // served different images for the same database after an edit. Now that
+  // images are tiny file-path lookups, reads are fast enough that always
+  // hitting the DB is the right trade-off and guarantees consistency.
+  return pool.query(text, params);
 };
 
 export const initDb = async () => {

@@ -167,6 +167,7 @@ const typeDefs = gql`
     deleteProduct(id: ID!): Boolean!
     updateHomeContent(key: String!, value: String!, type: String!, section: String): HomeContent!
     subscribeNewsletter(email: String!): Boolean!
+    deleteNewsletter(id: ID!): Boolean!
     createOrder(total: Float!, items: [OrderItemInput!]!, email: String, phone: String, address: String, city: String): Order!
     updateOrderStatus(id: ID!, status: String!): Order!
     updateCart(sessionId: String!, items: String!): Boolean!
@@ -204,51 +205,73 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, stock, created_at
-        FROM products 
+        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, stock, created_at,
+               left(md5(coalesce(image_url,'') || coalesce(images::text,'')), 8) AS v
+        FROM products
         ORDER BY created_at DESC
         ${limitStr}
       `);
       return res.rows.map((r: any) => ({
         ...r,
-        image_url: `/api/image/${r.id}`,
-        images: [`/api/image/${r.id}?idx=0`, `/api/image/${r.id}?idx=1`] // Return placeholders for proxy URLs
+        // ?v=<fingerprint> busts the browser cache whenever the stored image
+        // changes, so edited product images appear immediately.
+        image_url: `/api/image/${r.id}?v=${r.v}`,
+        images: [`/api/image/${r.id}?idx=0&v=${r.v}`, `/api/image/${r.id}?idx=1&v=${r.v}`]
       }));
     },
     categories: async () => {
-      const res = await query("SELECT id, name FROM categories ORDER BY name ASC");
-      const subRes = await query("SELECT id, name, category_id FROM sub_categories ORDER BY name ASC");
-      
+      const res = await query("SELECT id, name, left(md5(coalesce(image_url,'')), 8) AS v FROM categories ORDER BY name ASC");
+      const subRes = await query("SELECT id, name, category_id, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ORDER BY name ASC");
+
       return res.rows.map((r: any) => ({
         ...r,
-        image_url: `/api/image/${r.id}?type=category`,
+        image_url: `/api/image/${r.id}?type=category&v=${r.v}`,
         sub_categories: subRes.rows
           .filter((s: any) => s.category_id === r.id)
           .map((s: any) => ({
             ...s,
-            image_url: `/api/image/${s.id}?type=subcategory`
+            image_url: `/api/image/${s.id}?type=subcategory&v=${s.v}`
           }))
       }));
     },
     subCategories: async (_: any, { categoryId }: { categoryId?: string }) => {
       const where = categoryId ? `WHERE category_id = $1` : '';
       const params = categoryId ? [categoryId] : [];
-      const res = await query(`SELECT id, name, category_id FROM sub_categories ${where} ORDER BY name ASC`, params);
+      const res = await query(`SELECT id, name, category_id, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ${where} ORDER BY name ASC`, params);
       return res.rows.map((r: any) => ({
         ...r,
-        image_url: `/api/image/${r.id}?type=subcategory`
+        image_url: `/api/image/${r.id}?type=subcategory&v=${r.v}`
       }));
     },
     homeContent: async () => {
       const res = await query(`
-        SELECT id, key, type, section, 
-               CASE WHEN type = 'IMAGE' THEN '' ELSE value END as value
+        SELECT id, key, type, section,
+               CASE WHEN type = 'IMAGE' THEN '' ELSE value END as value,
+               EXTRACT(EPOCH FROM updated_at)::bigint AS v
         FROM home_content
       `);
-      return res.rows.map((r: any) => ({
-        ...r,
-        value: r.type === 'IMAGE' ? `/api/image/${r.id}?type=home` : r.value
-      }));
+      return res.rows.map((r: any) => {
+        if (r.type === 'IMAGE') {
+          // Append updated_at as a cache-busting version so a freshly edited
+          // image gets a new URL and the browser fetches it immediately.
+          return { ...r, value: `/api/image/${r.id}?type=home&v=${r.v || 0}` };
+        }
+        // Safety net: never ship a giant inline base64 image inside a JSON
+        // slot to the editor — it freezes the DOM. Replace it with a
+        // placeholder so the admin can just re-upload a compressed image.
+        if (r.type === 'JSON' && typeof r.value === 'string' && r.value.includes('data:image')) {
+          try {
+            const obj = JSON.parse(r.value);
+            if (typeof obj.image_url === 'string' && obj.image_url.startsWith('data:image')) {
+              obj.image_url = '/logo1.png';
+              return { ...r, value: JSON.stringify(obj) };
+            }
+          } catch {
+            // fall through and return as-is
+          }
+        }
+        return r;
+      });
     },
     newsletter: async (_: any, __: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
@@ -394,6 +417,11 @@ const resolvers = {
         "INSERT INTO newsletter (email) VALUES ($1) ON CONFLICT (email) DO NOTHING",
         [email]
       );
+      return true;
+    },
+    deleteNewsletter: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM newsletter WHERE id = $1", [id]);
       return true;
     },
     createOrder: async (_: any, { total, items, email, phone, address, city }: any, context: any) => {

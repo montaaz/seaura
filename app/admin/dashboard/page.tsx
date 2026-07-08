@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import Link from "next/link";
+import { compressImageFile } from "@/lib/compressImage";
 import {
     Layout,
     Package,
@@ -399,20 +400,16 @@ function ProductManager() {
         fetchData();
     };
 
-    const handleProductImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setNewProduct(prev => {
-                const newImages = [...prev.images, base64String];
-                return {
-                    ...prev,
-                    images: newImages,
-                    image_url: prev.image_url || base64String
-                };
-            });
-        };
-        reader.readAsDataURL(file);
+    const handleProductImageUpload = async (file: File) => {
+        const base64String = await compressImageFile(file);
+        setNewProduct(prev => {
+            const newImages = [...prev.images, base64String];
+            return {
+                ...prev,
+                images: newImages,
+                image_url: prev.image_url || base64String
+            };
+        });
     };
 
     const [isSavingProduct, setIsSavingProduct] = useState(false);
@@ -551,31 +548,39 @@ function ProductManager() {
                                                 onClick={async () => {
                                                     setEditingId(p.id);
 
-                                                    // Fetch full images for the product when editing to avoid loading them in the list
-                                                    let fullImages = (p.images && Array.isArray(p.images) && p.images.length > 0) ? p.images : (p.image_url ? [p.image_url] : []);
+                                                    // Load the REAL stored image data (not the /api/image/<id>
+                                                    // proxy placeholder from the list). Saving the placeholder
+                                                    // back would corrupt image_url into a self-referential loop.
+                                                    let fullImages: string[] = [];
+                                                    let realImageUrl = "";
 
                                                     try {
                                                         const res = await fetch('/api/graphql', {
                                                             method: 'POST',
                                                             headers: { 'Content-Type': 'application/json' },
                                                             body: JSON.stringify({
-                                                                query: `query($id: ID!) { product(id: $id) { images } }`,
+                                                                query: `query($id: ID!) { product(id: $id) { image_url images } }`,
                                                                 variables: { id: p.id }
                                                             })
                                                         });
                                                         const data = await res.json();
-                                                        if (data.data?.product?.images) {
-                                                            fullImages = data.data.product.images;
+                                                        if (data.data?.product) {
+                                                            fullImages = data.data.product.images || [];
+                                                            realImageUrl = data.data.product.image_url || "";
                                                         }
                                                     } catch (e) {
-                                                        console.error("Failed to fetch full images:", e);
+                                                        console.error("Failed to fetch product images:", e);
                                                     }
+
+                                                    // Never keep a proxy placeholder as the real value.
+                                                    if (realImageUrl.startsWith('/api/image/')) realImageUrl = "";
+                                                    if (!realImageUrl && fullImages.length > 0) realImageUrl = fullImages[0];
 
                                                     setNewProduct({
                                                         name: p.name,
                                                         price: p.price.toString(),
                                                         stock: (p.stock || 0).toString(),
-                                                        image_url: p.image_url || "",
+                                                        image_url: realImageUrl,
                                                         description: p.description || "",
                                                         category_id: p.category_id || "",
                                                         colors: p.colors || [],
@@ -989,16 +994,12 @@ function CMSManager() {
         }));
     };
 
-    const handleImageUpload = (key: string, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setStagedChanges(prev => ({
-                ...prev,
-                [key]: { ...prev[key], value: base64String }
-            }));
-        };
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (key: string, file: File) => {
+        const base64String = await compressImageFile(file);
+        setStagedChanges(prev => ({
+            ...prev,
+            [key]: { ...prev[key], value: base64String }
+        }));
     };
 
     const handlePublish = async () => {
@@ -1152,14 +1153,11 @@ function CMSManager() {
                                                                         <input
                                                                             type="file"
                                                                             accept="image/*"
-                                                                            onChange={(e) => {
+                                                                            onChange={async (e) => {
                                                                                 const file = e.target.files?.[0];
                                                                                 if (file) {
-                                                                                    const reader = new FileReader();
-                                                                                    reader.onloadend = () => {
-                                                                                        handleInputChange(item.key, JSON.stringify({ ...jsonVal, image_url: reader.result }));
-                                                                                    };
-                                                                                    reader.readAsDataURL(file);
+                                                                                    const result = await compressImageFile(file);
+                                                                                    handleInputChange(item.key, JSON.stringify({ ...jsonVal, image_url: result }));
                                                                                 }
                                                                             }}
                                                                             className="absolute inset-0 opacity-0 cursor-pointer"
@@ -1501,15 +1499,49 @@ function NewsletterManager() {
         );
     };
 
+    const handleDelete = async (id: string, email: string) => {
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Supprimer ce contact ?',
+            text: email,
+            showCancelButton: true,
+            confirmButtonText: 'Supprimer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#000',
+        });
+        if (!confirm.isConfirmed) return;
+
+        // Optimistically remove from the list
+        setEmails(prev => prev.filter(e => e.id !== id));
+        setSelectedUsers(prev => prev.filter(e => e !== email));
+
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($id: ID!) { deleteNewsletter(id: $id) }`,
+                    variables: { id }
+                })
+            });
+            const data = await res.json();
+            if (!data.data?.deleteNewsletter) {
+                throw new Error(data.errors?.[0]?.message || 'Suppression échouée');
+            }
+        } catch (err: any) {
+            // Revert on failure
+            fetchEmails();
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.message || 'Erreur lors de la suppression.', confirmButtonColor: '#000' });
+        }
+    };
+
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setUploadedImages(prev => [...prev, reader.result as string]);
-                };
-                reader.readAsDataURL(file);
+            files.forEach(async file => {
+                const result = await compressImageFile(file);
+                setUploadedImages(prev => [...prev, result]);
             });
         }
     };
@@ -1577,7 +1609,11 @@ function NewsletterManager() {
                                         </span>
                                     </td>
                                     <td className="px-8 py-6 text-right">
-                                        <button className="text-gray-300 hover:text-red-500 transition-colors">
+                                        <button
+                                            onClick={() => handleDelete(entry.id, entry.email)}
+                                            className="text-gray-300 hover:text-red-500 transition-colors"
+                                            title="Supprimer le contact"
+                                        >
                                             <Trash2 size={16} />
                                         </button>
                                     </td>
@@ -1746,22 +1782,18 @@ function CategoryManager() {
     };
 
     const handleUpdateImage = async (id: string, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64 = reader.result as string;
-            try {
-                await fetch('/api/graphql', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        query: `mutation($id: ID!, $image_url: String) { updateCategory(id: $id, image_url: $image_url) { id } }`,
-                        variables: { id, image_url: base64 }
-                    })
-                });
-                fetchCategories();
-            } catch (error) { }
-        };
-        reader.readAsDataURL(file);
+        const base64 = await compressImageFile(file);
+        try {
+            await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($id: ID!, $image_url: String) { updateCategory(id: $id, image_url: $image_url) { id } }`,
+                    variables: { id, image_url: base64 }
+                })
+            });
+            fetchCategories();
+        } catch (error) { }
     };
 
     const handleAddSub = async (catId: string, name: string) => {
@@ -1844,12 +1876,11 @@ function CategoryManager() {
                                     type="file"
                                     className="hidden"
                                     accept="image/*"
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
-                                            const reader = new FileReader();
-                                            reader.onloadend = () => setNewCatImage(reader.result as string);
-                                            reader.readAsDataURL(file);
+                                            const result = await compressImageFile(file);
+                                            setNewCatImage(result);
                                         }
                                     }}
                                 />
@@ -2585,12 +2616,9 @@ function AuthExperienceManager() {
 
     useEffect(() => { fetchImages(); }, []);
 
-    const handleImageChange = (key: string, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setImages(prev => ({ ...prev, [key]: reader.result as string }));
-        };
-        reader.readAsDataURL(file);
+    const handleImageChange = async (key: string, file: File) => {
+        const result = await compressImageFile(file);
+        setImages(prev => ({ ...prev, [key]: result }));
     };
 
     const handleSave = async (key: string) => {
