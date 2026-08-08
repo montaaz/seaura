@@ -291,7 +291,11 @@ const resolvers = {
       const res = await query("SELECT id, user_email, created_at::text FROM chat_sessions ORDER BY created_at DESC");
       return res.rows;
     },
-    chatHistory: async (_: any, { email }: any) => {
+    chatHistory: async (_: any, { email }: any, context: any) => {
+      // Only your own conversation, unless you're an admin — otherwise any
+      // email address could be used to read someone else's messages.
+      const isAdmin = context.session?.user?.role === 'ADMIN';
+      if (!isAdmin && context.session?.user?.email !== email) throw new Error('Not authorized');
       const res = await query(
         "SELECT m.id, m.session_id, m.sender_role, m.content, m.created_at::text FROM chat_messages m JOIN chat_sessions s ON m.session_id = s.id WHERE s.user_email = $1 ORDER BY m.created_at ASC",
         [email]
@@ -299,6 +303,8 @@ const resolvers = {
       return res.rows;
     },
     orders: async (_: any, __: any, context: any) => {
+      // Admin-only: exposes every customer's email, phone and order history.
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       // Optimise: Use a single query with JOIN to avoid N+1 issue
       const res = await query(`
         SELECT o.id, o.user_id, o.total, o.status, o.payment_status, o.created_at::text, o.customer_email, o.customer_phone,
@@ -325,6 +331,8 @@ const resolvers = {
       return res.rows;
     },
     activeCarts: async (_: any, __: any, context: any) => {
+      // Admin-only: live view of every visitor's basket.
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       try {
         const res = await query("SELECT id, session_id, items, updated_at::text FROM carts ORDER BY updated_at DESC LIMIT 50");
         // Diagnostic : on s'assure que chaque champ est bien là, quitte à forcer les noms
@@ -342,7 +350,10 @@ const resolvers = {
         return [];
       }
     },
-    wishlist: async (_: any, { email }: any) => {
+    wishlist: async (_: any, { email }: any, context: any) => {
+      // Only your own wishlist, unless you're an admin.
+      const isAdmin = context.session?.user?.role === 'ADMIN';
+      if (!isAdmin && context.session?.user?.email !== email) throw new Error('Not authorized');
       const res = await query("SELECT items FROM wishlists WHERE user_email = $1", [email]);
       return res.rows[0] ? JSON.stringify(res.rows[0].items) : "[]";
     },
@@ -438,31 +449,75 @@ const resolvers = {
     },
     createOrder: async (_: any, { total, items, email, phone, address, city }: any, context: any) => {
       const userId = context.session?.user?.id || null;
+
+      if (!Array.isArray(items) || items.length === 0) throw new Error('Le panier est vide.');
+
+      // Never trust prices from the browser — re-read them from the database
+      // and recompute the total, otherwise the cart can be edited client-side
+      // to buy anything for any amount.
+      const ids = items.map((it: any) => it.id).filter(Boolean);
+      if (ids.length === 0) throw new Error('Panier invalide.');
+
+      const priceRes = await query(
+        "SELECT id, name, price FROM products WHERE id = ANY($1::int[])",
+        [ids]
+      );
+      const priceById = new Map(
+        priceRes.rows.map((r: any) => [String(r.id), { name: r.name, price: Number(r.price) }])
+      );
+
+      const pricedItems = items.map((it: any) => {
+        const known = priceById.get(String(it.id));
+        if (!known) throw new Error(`Produit introuvable: ${it.id}`);
+        const quantity = Math.max(1, parseInt(it.quantity, 10) || 1);
+        return {
+          ...it,
+          quantity,
+          price: known.price,
+          name: known.name,
+        };
+      });
+
+      const serverTotal = Number(
+        pricedItems.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0).toFixed(2)
+      );
+
+      if (typeof total === 'number' && Math.abs(total - serverTotal) > 0.01) {
+        console.warn(`Order total mismatch: client sent ${total}, server computed ${serverTotal}`);
+      }
+
       const orderRes = await query(
         "INSERT INTO orders (user_id, total, status, customer_email, customer_phone, address, city) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *, created_at::text",
-        [userId, total, 'PENDING', email, phone, address, city]
+        [userId, serverTotal, 'PENDING', email, phone, address, city]
       );
       const order = orderRes.rows[0];
-      
-      for (const item of items) {
+
+      for (const item of pricedItems) {
         await query(
           "INSERT INTO order_items (order_id, product_id, quantity, price, size, color) VALUES ($1, $2, $3, $4, $5, $6)",
-          [order.id, item.id, item.quantity || 1, item.price, item.selectedSize, item.selectedColor]
+          [order.id, item.id, item.quantity, item.price, item.selectedSize, item.selectedColor]
         );
       }
-      
-      order.items = items.map((it: any) => ({ ...it, product_name: it.name }));
+
+      order.items = pricedItems.map((it: any) => ({ ...it, product_name: it.name }));
       return order;
     },
     updateOrderStatus: async (_: any, { id, status }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      // Read the previous status first: stock must only move on the actual
+      // transition into COMPLETED, or re-saving a completed order would
+      // decrement the same quantities again.
+      const prevRes = await query("SELECT status FROM orders WHERE id = $1", [id]);
+      const wasCompleted = prevRes.rows[0]?.status === 'COMPLETED';
+
       const res = await query(
         "UPDATE orders SET status = $1 WHERE id = $2 RETURNING *, created_at::text",
         [status, id]
       );
       const order = res.rows[0];
 
-      if (status === 'COMPLETED' && order) {
+      if (status === 'COMPLETED' && order && !wasCompleted) {
         await query("UPDATE orders SET payment_status = 'PAID' WHERE id = $1", [id]);
         order.payment_status = 'PAID';
         const itemsRes = await query("SELECT product_id, quantity FROM order_items WHERE order_id = $1", [id]);

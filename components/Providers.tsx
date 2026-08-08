@@ -8,7 +8,11 @@ interface UserContextType {
     setUserEmail: (email: string | null) => void;
     isEmailModalOpen: boolean;
     setIsEmailModalOpen: (open: boolean) => void;
+    hasSeenEmailModal: boolean;
+    markEmailModalSeen: () => void;
 }
+
+export const EMAIL_MODAL_SEEN_KEY = 'seaura_email_modal_seen';
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
@@ -21,22 +25,27 @@ export function useUser() {
 export function Providers({ children }: { children: ReactNode }) {
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+    // Assume "seen" until localStorage says otherwise, so the modal never flashes
+    // on the first render before the effect runs.
+    const [hasSeenEmailModal, setHasSeenEmailModal] = useState(true);
+
+    const markEmailModalSeen = () => {
+        setHasSeenEmailModal(true);
+        localStorage.setItem(EMAIL_MODAL_SEEN_KEY, '1');
+    };
 
     useEffect(() => {
         const storedEmail = localStorage.getItem('seaura_user_email');
         if (storedEmail) {
             setUserEmail(storedEmail);
             setIsEmailModalOpen(false);
-        } else {
-            // Only auto-open modal on homepage or if needed?
-            // User requested "only one time" so if it's not saved, we might show it.
-            // But let's leave it to the components to decide when to open.
         }
+        setHasSeenEmailModal(localStorage.getItem(EMAIL_MODAL_SEEN_KEY) === '1');
     }, []);
 
     return (
         <SessionProvider>
-            <UserContext.Provider value={{ userEmail, setUserEmail, isEmailModalOpen, setIsEmailModalOpen }}>
+            <UserContext.Provider value={{ userEmail, setUserEmail, isEmailModalOpen, setIsEmailModalOpen, hasSeenEmailModal, markEmailModalSeen }}>
                 {children}
             </UserContext.Provider>
         </SessionProvider>

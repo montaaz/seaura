@@ -8,11 +8,17 @@ import styles from "./EmailModal.module.css";
 import { useUser } from "./Providers";
 
 export default function EmailModal() {
-    const { isEmailModalOpen, setIsEmailModalOpen, setUserEmail } = useUser();
+    const { isEmailModalOpen, setIsEmailModalOpen, setUserEmail, markEmailModalSeen } = useUser();
     const [email, setEmail] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     if (!isEmailModalOpen) return null;
+
+    // Closing counts as "seen" so the modal is never auto-opened again.
+    const closeModal = () => {
+        markEmailModalSeen();
+        setIsEmailModalOpen(false);
+    };
 
     const handleSubscribe = async () => {
         if (!email || !email.includes('@')) {
@@ -45,7 +51,7 @@ export default function EmailModal() {
                 });
                 setUserEmail(email);
                 localStorage.setItem('seaura_user_email', email);
-                setIsEmailModalOpen(false);
+                closeModal();
             }
         } catch (error) {
             console.error(error);
@@ -63,7 +69,7 @@ export default function EmailModal() {
     return (
         <div className={styles.modalOverlay}>
             <div className={styles.modalContent}>
-                <button className={styles.modalClose} onClick={() => setIsEmailModalOpen(false)}>
+                <button className={styles.modalClose} onClick={closeModal}>
                     <CloseIcon size={24} />
                 </button>
 
@@ -84,7 +90,7 @@ export default function EmailModal() {
                                 className={styles.modalInput}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSubscribe()}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
                             />
                             <button className={styles.modalSubmit} onClick={handleSubscribe} disabled={isSubmitting}>
                                 <ArrowRight size={20} />
@@ -97,7 +103,7 @@ export default function EmailModal() {
                     </div>
                 </div>
             </div>
-            <div className={styles.modalBackdrop} onClick={() => setIsEmailModalOpen(false)}></div>
+            <div className={styles.modalBackdrop} onClick={closeModal}></div>
         </div>
     );
 }

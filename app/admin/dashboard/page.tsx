@@ -34,7 +34,8 @@ import {
     DollarSign,
     PieChart,
     HelpCircle,
-    FileText
+    FileText,
+    Check
 } from "lucide-react";
 
 function SettingsManager() {
@@ -324,17 +325,17 @@ export default function AdminDashboard() {
 
             {/* Main Content */}
             <div className="flex-1 h-full overflow-y-auto bg-gray-50/50 p-6 lg:p-12 pt-24 lg:pt-12">
-                <header className="flex justify-between items-end mb-12">
+                <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8 lg:mb-12">
                     <div>
-                        <h2 className="text-4xl font-light tracking-tight">
+                        <h2 className="text-3xl lg:text-4xl font-light tracking-tight">
                             {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : activeTab === 'clients' ? 'Clients' : 'Configuration'}
                         </h2>
                         <p className="text-gray-400 mt-2 text-sm">
                             {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : activeTab === 'auth' ? 'Gestion des visuels d\'authentification' : activeTab === 'clients' ? 'Gestion de la base de données clients' : 'Managing the brand\'s digital presence'}
                         </p>
                     </div>
-                    <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-                        <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs">
+                    <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm self-start sm:self-auto flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs flex-shrink-0">
                             {(session.user?.email?.[0] || 'A').toUpperCase()}
                         </div>
                         <div className="text-xs uppercase tracking-tighter pr-4 font-bold">{(session.user as any)?.role}</div>
@@ -470,10 +471,58 @@ function ProductManager() {
         }
     };
 
+    // Shared by the desktop table row and the mobile card so the edit flow
+    // stays identical in both layouts.
+    const handleEdit = async (p: any) => {
+        setEditingId(p.id);
+
+        // Load the REAL stored image data (not the /api/image/<id>
+        // proxy placeholder from the list). Saving the placeholder
+        // back would corrupt image_url into a self-referential loop.
+        let fullImages: string[] = [];
+        let realImageUrl = "";
+
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `query($id: ID!) { product(id: $id) { image_url images } }`,
+                    variables: { id: p.id }
+                })
+            });
+            const data = await res.json();
+            if (data.data?.product) {
+                fullImages = data.data.product.images || [];
+                realImageUrl = data.data.product.image_url || "";
+            }
+        } catch (e) {
+            console.error("Failed to fetch product images:", e);
+        }
+
+        // Never keep a proxy placeholder as the real value.
+        if (realImageUrl.startsWith('/api/image/')) realImageUrl = "";
+        if (!realImageUrl && fullImages.length > 0) realImageUrl = fullImages[0];
+
+        setNewProduct({
+            name: p.name,
+            price: p.price.toString(),
+            stock: (p.stock || 0).toString(),
+            image_url: realImageUrl,
+            description: p.description || "",
+            category_id: p.category_id || "",
+            colors: p.colors || [],
+            images: fullImages,
+            sizes: p.sizes || [],
+            has_sizes: p.has_sizes !== undefined ? p.has_sizes : true
+        });
+        setIsAdding(true);
+    };
+
     return (
         <div className="space-y-6">
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-10 border-b border-gray-100 flex justify-between items-center bg-white">
+                <div className="p-5 sm:p-8 lg:p-10 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white">
                     <div className="flex items-center gap-3">
                         <ShoppingBag className="text-gray-300" />
                         <h3 className="text-xl font-light">Inventory</h3>
@@ -490,7 +539,76 @@ function ProductManager() {
                     </button>
                 </div>
 
-                <div className="p-2">
+                {/* Mobile: card list — a 7-column table can't fit a phone, and the
+                    hover-only action buttons are unreachable on touch. */}
+                <div className="lg:hidden divide-y divide-gray-50">
+                    {loading ? (
+                        <div className="p-16 text-center text-gray-300 animate-pulse">Syncing data...</div>
+                    ) : products.length === 0 ? (
+                        <div className="p-16 text-center text-gray-300">Aucun produit.</div>
+                    ) : products.map((p: any) => (
+                        <div key={p.id} className="p-5 flex gap-4">
+                            <div className="w-20 h-24 bg-gray-100 flex-shrink-0 relative overflow-hidden rounded-xl">
+                                <img
+                                    src={(p.images && p.images.length > 0) ? p.images[0] : (p.image_url || "/images/jewelry.png")}
+                                    className="object-cover w-full h-full"
+                                    alt={p.name}
+                                />
+                            </div>
+
+                            <div className="flex-1 min-w-0 space-y-2">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-sm tracking-tight break-words">{p.name}</p>
+                                        <p className="text-[10px] font-mono text-gray-400 mt-0.5">#{p.id.slice(-6).toUpperCase()}</p>
+                                    </div>
+                                    <span className="text-sm text-gray-500 whitespace-nowrap">TND{p.price}</span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${p.stock <= 0 ? 'bg-red-50 text-red-500' : p.stock < 5 ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-500'}`}>
+                                        {p.stock <= 0 ? 'RUPTURE' : `${p.stock} unités`}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                                        {categories.find(c => c.id === p.category_id)?.name || "—"}
+                                    </span>
+                                    {p.colors?.length > 0 && (
+                                        <div className="flex gap-1">
+                                            {p.colors.map((c: any) => (
+                                                <div
+                                                    key={c.name}
+                                                    className="w-3 h-3 rounded-full border border-gray-100"
+                                                    style={{ backgroundColor: c.hex }}
+                                                    title={c.name}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Always visible on touch — never hover-gated. */}
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        onClick={() => handleEdit(p)}
+                                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform"
+                                    >
+                                        <Settings size={14} className="text-gray-400" /> Modifier
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(p.id)}
+                                        aria-label={`Supprimer ${p.name}`}
+                                        className="px-4 py-2.5 rounded-xl border border-red-100 text-red-400 active:scale-95 transition-transform"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Desktop: full table */}
+                <div className="hidden lg:block p-2 overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] border-b border-gray-50">
@@ -543,58 +661,15 @@ function ProductManager() {
                                         </div>
                                     </td>
                                     <td className="px-10 py-6 text-right">
-                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
-                                                onClick={async () => {
-                                                    setEditingId(p.id);
-
-                                                    // Load the REAL stored image data (not the /api/image/<id>
-                                                    // proxy placeholder from the list). Saving the placeholder
-                                                    // back would corrupt image_url into a self-referential loop.
-                                                    let fullImages: string[] = [];
-                                                    let realImageUrl = "";
-
-                                                    try {
-                                                        const res = await fetch('/api/graphql', {
-                                                            method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({
-                                                                query: `query($id: ID!) { product(id: $id) { image_url images } }`,
-                                                                variables: { id: p.id }
-                                                            })
-                                                        });
-                                                        const data = await res.json();
-                                                        if (data.data?.product) {
-                                                            fullImages = data.data.product.images || [];
-                                                            realImageUrl = data.data.product.image_url || "";
-                                                        }
-                                                    } catch (e) {
-                                                        console.error("Failed to fetch product images:", e);
-                                                    }
-
-                                                    // Never keep a proxy placeholder as the real value.
-                                                    if (realImageUrl.startsWith('/api/image/')) realImageUrl = "";
-                                                    if (!realImageUrl && fullImages.length > 0) realImageUrl = fullImages[0];
-
-                                                    setNewProduct({
-                                                        name: p.name,
-                                                        price: p.price.toString(),
-                                                        stock: (p.stock || 0).toString(),
-                                                        image_url: realImageUrl,
-                                                        description: p.description || "",
-                                                        category_id: p.category_id || "",
-                                                        colors: p.colors || [],
-                                                        images: fullImages,
-                                                        sizes: p.sizes || [],
-                                                        has_sizes: p.has_sizes !== undefined ? p.has_sizes : true
-                                                    });
-                                                    setIsAdding(true);
-                                                }}
+                                                onClick={() => handleEdit(p)}
+                                                aria-label={`Modifier ${p.name}`}
                                                 className="p-3 hover:bg-white rounded-full transition-shadow border border-transparent hover:border-gray-200"
                                             >
                                                 <Settings size={14} className="text-gray-400" />
                                             </button>
-                                            <button onClick={() => handleDelete(p.id)} className="p-3 hover:bg-red-50 rounded-full transition-colors border border-transparent text-red-300 hover:text-red-500">
+                                            <button onClick={() => handleDelete(p.id)} aria-label={`Supprimer ${p.name}`} className="p-3 hover:bg-red-50 rounded-full transition-colors border border-transparent text-red-300 hover:text-red-500">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -1714,7 +1789,8 @@ function NewsletterManager() {
                                                     <img src={img} className="w-full h-full object-cover" />
                                                     <button
                                                         onClick={() => removeImage(idx)}
-                                                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        aria-label="Retirer cette image"
+                                                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity"
                                                     >
                                                         <X size={12} />
                                                     </button>
@@ -1754,6 +1830,11 @@ function CategoryManager() {
     const [newCatName, setNewCatName] = useState("");
     const [newCatImage, setNewCatImage] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    // Inline rename: which row is in edit mode, and its draft name.
+    const [editingCatId, setEditingCatId] = useState<string | null>(null);
+    const [editingSubId, setEditingSubId] = useState<string | null>(null);
+    const [draftName, setDraftName] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
 
     const fetchCategories = () => {
         setLoading(true);
@@ -1807,6 +1888,61 @@ function CategoryManager() {
             });
             fetchCategories();
         } catch (error) { }
+    };
+
+    const startEditCat = (cat: any) => {
+        setEditingSubId(null);
+        setEditingCatId(cat.id);
+        setDraftName(cat.name);
+    };
+
+    const startEditSub = (sub: any) => {
+        setEditingCatId(null);
+        setEditingSubId(sub.id);
+        setDraftName(sub.name);
+    };
+
+    const cancelEdit = () => {
+        setEditingCatId(null);
+        setEditingSubId(null);
+        setDraftName("");
+    };
+
+    // Renames a category or a sub-category depending on `kind`. Both backend
+    // mutations COALESCE on name, so sending only the name leaves the image alone.
+    const handleRename = async (kind: 'category' | 'sub', id: string, originalName: string) => {
+        const name = draftName.trim();
+        if (!name || name === originalName) {
+            cancelEdit();
+            return;
+        }
+        setIsRenaming(true);
+        try {
+            const mutation = kind === 'category'
+                ? `mutation($id: ID!, $name: String) { updateCategory(id: $id, name: $name) { id name } }`
+                : `mutation($id: ID!, $name: String) { updateSubCategory(id: $id, name: $name) { id name } }`;
+
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: mutation, variables: { id, name } })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+
+            cancelEdit();
+            fetchCategories();
+        } catch (error) {
+            console.error(error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: 'Le renommage a échoué. Veuillez réessayer.',
+                confirmButtonColor: '#000'
+            });
+        } finally {
+            setIsRenaming(false);
+        }
     };
 
     const handleAddSub = async (catId: string, name: string) => {
@@ -1947,14 +2083,54 @@ function CategoryManager() {
                                                 }}
                                             />
                                         </label>
-                                        <div>
-                                            <span className="text-xl font-medium text-gray-800 block">{cat.name}</span>
+                                        <div className="min-w-0">
+                                            {editingCatId === cat.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        autoFocus
+                                                        value={draftName}
+                                                        disabled={isRenaming}
+                                                        onChange={(e) => setDraftName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') { e.preventDefault(); handleRename('category', cat.id, cat.name); }
+                                                            if (e.key === 'Escape') cancelEdit();
+                                                        }}
+                                                        className="text-xl font-medium text-gray-800 bg-gray-50 border border-gray-200 focus:border-black rounded-xl px-4 py-1 outline-none transition-all min-w-0 w-full max-w-xs"
+                                                    />
+                                                    <button
+                                                        onClick={() => handleRename('category', cat.id, cat.name)}
+                                                        disabled={isRenaming}
+                                                        aria-label="Enregistrer le nom"
+                                                        className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-all disabled:opacity-40"
+                                                    >
+                                                        <Check size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEdit}
+                                                        disabled={isRenaming}
+                                                        aria-label="Annuler"
+                                                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-40"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => startEditCat(cat)}
+                                                    title="Cliquer pour renommer"
+                                                    className="text-xl font-medium text-gray-800 block text-left hover:text-black transition-colors flex items-center gap-2 group/name"
+                                                >
+                                                    {cat.name}
+                                                    <Settings size={13} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                                </button>
+                                            )}
                                             <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">ID: #{cat.id}</p>
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => handleDelete(cat.id)}
-                                        className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                        aria-label={`Supprimer ${cat.name}`}
+                                        className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all flex-shrink-0"
                                     >
                                         <Trash2 size={18} />
                                     </button>
@@ -1965,10 +2141,55 @@ function CategoryManager() {
                                     <div className="flex flex-wrap gap-3">
                                         {(cat.sub_categories || []).map((sub: any) => (
                                             <div key={sub.id} className="bg-gray-50 rounded-full px-5 py-2 flex items-center gap-3 border border-gray-100 group/sub">
-                                                <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">{sub.name}</span>
-                                                <button onClick={() => handleDeleteSub(sub.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover/sub:opacity-100 transition-opacity">
-                                                    <X size={12} />
-                                                </button>
+                                                {editingSubId === sub.id ? (
+                                                    <>
+                                                        <input
+                                                            autoFocus
+                                                            value={draftName}
+                                                            disabled={isRenaming}
+                                                            onChange={(e) => setDraftName(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') { e.preventDefault(); handleRename('sub', sub.id, sub.name); }
+                                                                if (e.key === 'Escape') cancelEdit();
+                                                            }}
+                                                            size={Math.max(draftName.length, 6)}
+                                                            className="text-xs font-bold text-gray-700 uppercase tracking-widest bg-transparent border-b border-black outline-none min-w-0"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleRename('sub', sub.id, sub.name)}
+                                                            disabled={isRenaming}
+                                                            aria-label="Enregistrer"
+                                                            className="text-gray-400 hover:text-black transition-colors disabled:opacity-40"
+                                                        >
+                                                            <Check size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={cancelEdit}
+                                                            disabled={isRenaming}
+                                                            aria-label="Annuler"
+                                                            className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => startEditSub(sub)}
+                                                            title="Cliquer pour renommer"
+                                                            className="text-xs font-bold text-gray-600 uppercase tracking-widest hover:text-black transition-colors"
+                                                        >
+                                                            {sub.name}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteSub(sub.id)}
+                                                            aria-label={`Supprimer ${sub.name}`}
+                                                            className="text-gray-300 hover:text-red-500 opacity-0 group-hover/sub:opacity-100 focus:opacity-100 transition-opacity"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -1978,7 +2199,7 @@ function CategoryManager() {
                                             type="text"
                                             placeholder="+ Ajouter sous-catégorie"
                                             className="w-full bg-white border border-gray-100 rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest focus:border-black outline-none transition-all pr-12"
-                                            onKeyPress={(e) => {
+                                            onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
                                                     handleAddSub(cat.id, (e.target as HTMLInputElement).value);
                                                     (e.target as HTMLInputElement).value = "";
@@ -2085,6 +2306,30 @@ function OrderManager() {
 
     if (loading) return <div className="flex h-full items-center justify-center font-black tracking-[0.5em] text-black/5 animate-pulse uppercase">Chargement en temps réel...</div>;
 
+    // Parse each cart once, then drop the empty ones — a visitor who opened the
+    // site without adding anything isn't useful to see here.
+    const liveCarts = (activeCarts || []).flatMap((cart: any) => {
+        if (!cart) return [];
+
+        let items: any[] = [];
+        try {
+            items = typeof cart.items === 'string' ? JSON.parse(cart.items) : (cart.items || []);
+            if (!Array.isArray(items)) items = [];
+        } catch (e) { items = []; }
+
+        if (items.length === 0) return [];
+
+        const total = items.reduce((sum: number, it: any) => {
+            const price = parseFloat(it.price || 0);
+            const qty = parseInt(it.quantity, 10) || 1;
+            return sum + (isNaN(price) ? 0 : price * qty);
+        }, 0);
+
+        if (total <= 0) return [];
+
+        return [{ cart, items, total }];
+    });
+
     return (
         <div className="space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-1000">
             {/* Live Section */}
@@ -2094,35 +2339,24 @@ function OrderManager() {
                         <Monitor size={16} />
                     </div>
                     <div>
-                        <h3 className="text-xl font-light tracking-tight">Paniers Actifs (Live — {activeCarts.length} sessions)</h3>
+                        <h3 className="text-xl font-light tracking-tight">Paniers Actifs (Live — {liveCarts.length} sessions)</h3>
                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Visiteurs en train de choisir</p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {(activeCarts || []).length === 0 ? (
+                    {liveCarts.length === 0 ? (
                         <div className="lg:col-span-3 bg-white/50 border border-dashed border-gray-200 rounded-[2rem] p-12 text-center">
                             <p className="text-gray-400 text-sm font-light italic">Aucune activité détectée pour le moment.</p>
                         </div>
                     ) : (
-                        (activeCarts || []).map((cart: any) => {
-                            if (!cart) return null;
-                            let items = [];
-                            try {
-                                items = typeof cart.items === 'string' ? JSON.parse(cart.items) : (cart.items || []);
-                                if (!Array.isArray(items)) items = [];
-                            } catch (e) { items = []; }
-
-                            const total = items.reduce((sum: number, it: any) => {
-                                const p = parseFloat(it.price || 0);
-                                return sum + (isNaN(p) ? 0 : p);
-                            }, 0);
-
+                        liveCarts.map(({ cart, items, total }) => {
                             return (
                                 <div key={cart.id} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-xl group hover:-translate-y-2 transition-all duration-500 relative">
                                     <button
                                         onClick={() => handleDeleteActiveCart(cart.session_id)}
-                                        className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all z-10"
+                                        aria-label="Supprimer la session"
+                                        className="absolute top-6 right-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all z-10"
                                         title="Supprimer la session"
                                     >
                                         <Trash2 size={14} />
@@ -2134,11 +2368,11 @@ function OrderManager() {
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        {items.length === 0 ? (
-                                            <p className="text-[10px] italic text-gray-300">Exploration en cours (Sac vide)</p>
-                                        ) : items.map((item: any, i: number) => (
+                                        {items.map((item: any, i: number) => (
                                             <div key={i} className="flex gap-4 items-center border-b border-gray-50 pb-4 last:border-none last:pb-0">
-                                                <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-[10px] font-bold">{i + 1}</div>
+                                                <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-[10px] font-bold">
+                                                    {parseInt(item.quantity, 10) || 1}
+                                                </div>
                                                 <div>
                                                     <p className="text-sm font-bold tracking-tight">{item.name || 'Produit'}</p>
                                                     <p className="text-[9px] uppercase font-black tracking-widest text-gray-400">{item.selectedSize || 'Unique'} — {item.selectedColor || 'Par défaut'}</p>
@@ -2518,7 +2752,7 @@ function AccountingManager() {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto overflow-x-auto p-6 md:p-12 custom-scrollbar">
                             <div className="min-w-[800px]">
                                 <table className="w-full text-left border-separate border-spacing-y-4">
                                     <thead>

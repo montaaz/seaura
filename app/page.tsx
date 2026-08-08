@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { ArrowUp, Instagram, MessageCircle, Send, X as CloseIcon, User as UserIcon } from "lucide-react";
 import Swal from "sweetalert2";
-import { useUser } from "@/components/Providers";
+import { useUser, EMAIL_MODAL_SEEN_KEY } from "@/components/Providers";
 
 const LoadingScreen = dynamic(() => import('@/components/LoadingScreen'), { ssr: false });
 const Header = dynamic(() => import('@/components/Header'), { ssr: false });
@@ -332,7 +332,7 @@ export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const { userEmail, setUserEmail, setIsEmailModalOpen } = useUser();
+  const { userEmail, setUserEmail, setIsEmailModalOpen, markEmailModalSeen } = useUser();
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [cmsContent, setCmsContent] = useState<any>({});
@@ -422,7 +422,8 @@ export default function Home() {
     const storedEmail = localStorage.getItem('seaura_user_email');
     if (storedEmail) {
       setUserEmail(storedEmail);
-    } else {
+    } else if (localStorage.getItem(EMAIL_MODAL_SEEN_KEY) !== '1') {
+      // Auto-open only for a visitor who has never been shown the modal.
       setIsEmailModalOpen(true);
     }
 
@@ -430,7 +431,12 @@ export default function Home() {
       setIsScrolled(window.scrollY > 50);
       setShowScrollTop(window.scrollY > 400);
     };
-    const handleKeydown = (e: KeyboardEvent) => { if (e.key === "Escape") setIsEmailModalOpen(false); };
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        markEmailModalSeen();
+        setIsEmailModalOpen(false);
+      }
+    };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("keydown", handleKeydown);
@@ -488,7 +494,7 @@ export default function Home() {
       <section className={styles.newsletter}>
         <video
           className={styles.newsletterVideo}
-          src="https://withlyberty.com/cdn/shop/videos/c/vp/db413def4bfa4d05bbd6d17c0c1ade19/db413def4bfa4d05bbd6d17c0c1ade19.HD-1080p-7.2Mbps-73320821.mp4?v=0"
+          src="/home.mp4"
           autoPlay
           muted
           loop

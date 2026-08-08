@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
 import LoadingScreen from "@/components/LoadingScreen";
+import { productMatchesColor } from "@/lib/colorMatch";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -55,6 +56,10 @@ function ShopListing() {
         { name: "Violet", hex: "#8A2BE2" }
     ];
 
+    const selectedSwatch = selectedColor
+        ? colors.find(c => c.name === selectedColor) ?? null
+        : null;
+
     const [searchQuery, setSearchQuery] = useState("");
     const [cmsContent, setCmsContent] = useState<Record<string, string>>({});
     const searchParams = useSearchParams();
@@ -66,8 +71,9 @@ function ShopListing() {
         const matchesSearch = !searchQuery ||
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        // Note: Color filtering would need product color data, assuming p.colors matches
-        const matchesColor = !selectedColor || p.colors?.some((c: any) => c.name.toLowerCase() === selectedColor.toLowerCase());
+        // Product color names are free-text from the admin, so match on canonical
+        // name + hex proximity rather than exact string equality.
+        const matchesColor = productMatchesColor(p.colors, selectedSwatch);
 
         return matchesCategory && matchesSearch && matchesColor;
     });
@@ -212,10 +218,41 @@ function ShopListing() {
                 <div className={styles.filterBar}>
                     <div className={styles.filterGroup}>
                         <button
-                            className={`${styles.filterBtn} ${activeDropdown === 'color' ? styles.filterBtnActive : ""}`}
+                            className={`${styles.filterBtn} ${activeDropdown === 'color' ? styles.filterBtnActive : ""} ${selectedSwatch ? styles.filterBtnSelected : ""}`}
                             onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
                         >
-                            Couleur <ChevronDown size={14} className={activeDropdown === 'color' ? styles.rotateIcon : ""} />
+                            {selectedSwatch ? (
+                                <>
+                                    <span
+                                        className={styles.filterBtnSwatch}
+                                        style={{
+                                            background: selectedSwatch.hex,
+                                            border: selectedSwatch.name === 'Blanc' ? '1px solid #ddd' : 'none',
+                                        }}
+                                    />
+                                    {selectedSwatch.name}
+                                    <span
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label="Effacer le filtre couleur"
+                                        className={styles.filterBtnClear}
+                                        onClick={(e) => { e.stopPropagation(); setSelectedColor(null); }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setSelectedColor(null);
+                                            }
+                                        }}
+                                    >
+                                        <CloseIcon size={12} />
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    Couleur <ChevronDown size={14} className={activeDropdown === 'color' ? styles.rotateIcon : ""} />
+                                </>
+                            )}
                         </button>
                         {activeDropdown === 'color' && (
                             <div className={styles.dropdownContent}>
@@ -224,7 +261,7 @@ function ShopListing() {
                                         <div
                                             key={color.name}
                                             className={`${styles.colorOption} ${selectedColor === color.name ? styles.colorOptionSelected : ""}`}
-                                            onClick={() => setSelectedColor(color.name)}
+                                            onClick={() => setSelectedColor(selectedColor === color.name ? null : color.name)}
                                         >
                                             <div className={styles.colorSquare} style={{ background: color.hex, border: color.name === 'Blanc' ? '1px solid #ddd' : 'none' }} />
                                             <span className={styles.colorName}>{color.name}</span>
@@ -309,7 +346,15 @@ function ShopListing() {
                         </div>
                     ))}
                 </div>
-                {cart.length > 0 && <div className={styles.cartFooter}><button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button></div>}
+                {cart.length > 0 && (
+                    <div className={styles.cartFooter}>
+                        <div className={styles.cartTotal}>
+                            <span>Subtotal</span>
+                            <span>{cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0).toFixed(2)} TND</span>
+                        </div>
+                        <button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button>
+                    </div>
+                )}
             </div>
         </div>
     );
