@@ -109,6 +109,20 @@ export const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Percentage discounts scoped to a category, a sub-category or a single
+      -- product. Active only between starts_at and ends_at; the window is
+      -- internal and never exposed to shoppers.
+      CREATE TABLE IF NOT EXISTS discounts (
+        id SERIAL PRIMARY KEY,
+        scope VARCHAR(20) NOT NULL,           -- 'category' | 'subcategory' | 'product'
+        target_id INTEGER NOT NULL,
+        percent NUMERIC(5,2) NOT NULL CHECK (percent > 0 AND percent <= 100),
+        starts_at DATE NOT NULL,
+        ends_at DATE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (ends_at >= starts_at)
+      );
+
       -- "Notify me when available" requests. One pending row per
       -- (product, email); notified_at is stamped when the mail goes out so the
       -- same request is never sent twice.
@@ -153,6 +167,8 @@ export const initDb = async () => {
       await client.query(`
         -- Backs the first-order eligibility lookup, which matches on lowercased email.
         CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders (lower(customer_email));
+        -- Backs the per-product discount lookup, which filters by scope + target.
+        CREATE INDEX IF NOT EXISTS idx_discounts_scope_target ON discounts (scope, target_id);
         -- One outstanding stock alert per product/email. Partial, so a shopper can
         -- subscribe again after being notified for an earlier restock.
         CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_notif_pending

@@ -66,7 +66,7 @@ function ShopDetail() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes has_sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price original_price discount_percent image_url images category_id colors { name hex } sizes has_sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -502,7 +502,15 @@ function ShopDetail() {
                     <div className={styles.mobileSummaryBar}>
                         <div className="px-6 py-4 flex flex-col gap-6">
                             <h2 className={styles.detailTitle}>{product.name}</h2>
-                            <div className={styles.detailPrice}>{product.price} TND</div>
+                            <div className={styles.detailPrice}>
+                            {Number(product.price).toFixed(2)} TND
+                            {product.original_price && (
+                                <>
+                                    <span className={styles.oldPrice}>{Number(product.original_price).toFixed(2)} TND</span>
+                                    <span className={styles.discountBadgeSmall}>-{Number(product.discount_percent)}%</span>
+                                </>
+                            )}
+                        </div>
                             
                             <div className={styles.colorGrid}>
                                 {(product.colors?.length > 0 ? product.colors : [{ name: "Noir", hex: "#000000" }]).map((color: any) => (
@@ -550,7 +558,15 @@ function ShopDetail() {
 
                     <div className={styles.detailsMainContent} style={{ paddingTop: '0' }}>
                         <h2 className={styles.detailTitle} style={{ marginTop: '0' }}>{product.name}</h2>
-                        <div className={styles.detailPrice}>{product.price} TND</div>
+                        <div className={styles.detailPrice}>
+                            {Number(product.price).toFixed(2)} TND
+                            {product.original_price && (
+                                <>
+                                    <span className={styles.oldPrice}>{Number(product.original_price).toFixed(2)} TND</span>
+                                    <span className={styles.discountBadgeSmall}>-{Number(product.discount_percent)}%</span>
+                                </>
+                            )}
+                        </div>
 
                         <div className={`${styles.collapsibleContent} ${isExpanded ? styles.contentVisible : ""}`}>
                             {product.has_sizes !== false && (

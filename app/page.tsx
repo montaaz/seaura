@@ -132,12 +132,26 @@ const CategoriesSection = React.memo(({ categories }: { categories: any[] }) => 
   </section>
 ));
 
-const WelcomeSection = React.memo(() => (
+// Renders *text between asterisks* in italics. Kept to this tiny markup rather
+// than injecting admin HTML, so editing the copy can never inject markup.
+const withEmphasis = (text: string) =>
+  text.split(/(\*[^*]+\*)/g).map((part, i) =>
+    part.startsWith('*') && part.endsWith('*') && part.length > 2
+      ? <em key={i}>{part.slice(1, -1)}</em>
+      : part
+  );
+
+const WelcomeSection = React.memo(({ cmsContent }: any) => (
   <section className={styles.welcomeSection}>
     <div className={styles.welcomeContainer}>
-      <h2 className={styles.welcomeHeading}>WELCOME TO SEAURA</h2>
+      <h2 className={styles.welcomeHeading}>
+        {cmsContent?.welcome_title || 'WELCOME TO SEAURA'}
+      </h2>
       <p className={styles.welcomeText}>
-        Introducing our latest limited edition edit. Handcrafted in our studio and designed to make you feel confident, effortlessly refined and <em>entirely yourself.</em>
+        {withEmphasis(
+          cmsContent?.welcome_text ||
+          'Introducing our latest limited edition edit. Handcrafted in our studio and designed to make you feel confident, effortlessly refined and *entirely yourself.*'
+        )}
       </p>
     </div>
   </section>
@@ -495,7 +509,7 @@ export default function Home() {
       <CategoriesSection categories={categories} />
 
       {/* Welcome Section */}
-      <WelcomeSection />
+      <WelcomeSection cmsContent={cmsContent} />
 
       {/* Video Section */}
       <section className={styles.newsletter}>

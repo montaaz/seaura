@@ -37,7 +37,8 @@ import {
     FileText,
     Check,
     ChevronUp,
-    ChevronDown
+    ChevronDown,
+    Percent
 } from "lucide-react";
 
 function SettingsManager() {
@@ -310,6 +311,14 @@ export default function AdminDashboard() {
                     </button>
 
                     <button
+                        onClick={() => { setActiveTab('discounts'); setIsSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'discounts' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
+                    >
+                        <Percent size={20} />
+                        <span className="text-xs uppercase font-bold tracking-[0.1em]">Promotions</span>
+                    </button>
+
+                    <button
                         onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }}
                         className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'orders' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
                     >
@@ -385,7 +394,7 @@ export default function AdminDashboard() {
                 <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8 lg:mb-12">
                     <div>
                         <h2 className="text-3xl lg:text-4xl font-light tracking-tight">
-                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : activeTab === 'clients' ? 'Clients' : 'Configuration'}
+                            {activeTab === 'products' ? 'Collection' : activeTab === 'cms' ? 'Experience' : activeTab === 'newsletter' ? 'Audience' : activeTab === 'categories' ? 'Classification' : activeTab === 'discounts' ? 'Promotions' : activeTab === 'orders' ? 'Transactions' : activeTab === 'accounting' ? 'Bookkeeping' : activeTab === 'help' ? 'Conciergerie' : activeTab === 'auth' ? 'Authentification' : activeTab === 'clients' ? 'Clients' : 'Configuration'}
                         </h2>
                         <p className="text-gray-400 mt-2 text-sm">
                             {activeTab === 'settings' ? 'Gérer les configurations système' : activeTab === 'orders' ? 'Gestion des commandes clients' : activeTab === 'accounting' ? 'Analyse financière et gestion des bénéfices' : activeTab === 'auth' ? 'Gestion des visuels d\'authentification' : activeTab === 'clients' ? 'Gestion de la base de données clients' : 'Managing the brand\'s digital presence'}
@@ -404,6 +413,7 @@ export default function AdminDashboard() {
                     {activeTab === "cms" && <CMSManager />}
                     {activeTab === "newsletter" && <NewsletterManager />}
                     {activeTab === "categories" && <CategoryManager />}
+                    {activeTab === "discounts" && <DiscountManager />}
                     {activeTab === "orders" && <OrderManager />}
                     {activeTab === "settings" && <SettingsManager />}
                     {activeTab === "help" && <HelpContentManager />}
@@ -1277,7 +1287,7 @@ function CMSManager() {
 
     const sections = Array.from(new Set(content.map(i => i.section))).sort((a, b) => {
         // Mirrors the order these sections appear on the homepage.
-        const order = ['branding', 'hero', 'categories', 'featured', 'newsletter', 'instagram'];
+        const order = ['branding', 'hero', 'categories', 'welcome', 'featured', 'newsletter', 'instagram'];
         const idxA = order.indexOf(a || '');
         const idxB = order.indexOf(b || '');
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -2147,6 +2157,261 @@ function NewsletterManager() {
     );
 }
 
+function DiscountManager() {
+    const [discounts, setDiscounts] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const today = new Date().toISOString().split('T')[0];
+    const emptyForm = { scope: 'category', target_id: '', percent: '', starts_at: today, ends_at: '' };
+    const [form, setForm] = useState(emptyForm);
+
+    const fetchAll = () => {
+        setLoading(true);
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: `{
+                    discounts { id scope target_id target_name percent starts_at ends_at is_active product_count }
+                    categories { id name sub_categories { id name } }
+                    products { id name price }
+                }`
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                setDiscounts(data.data?.discounts || []);
+                setCategories(data.data?.categories || []);
+                setProducts(data.data?.products || []);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    };
+
+    useEffect(() => { fetchAll(); }, []);
+
+    // Options for the target picker, driven by the selected scope.
+    const targetOptions = form.scope === 'category'
+        ? categories.map(c => ({ id: c.id, name: c.name }))
+        : form.scope === 'subcategory'
+            ? categories.flatMap((c: any) => (c.sub_categories || []).map((s: any) => ({ id: s.id, name: `${c.name} › ${s.name}` })))
+            : products.map((p: any) => ({ id: p.id, name: `${p.name} — ${Number(p.price).toFixed(2)} TND` }));
+
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!form.target_id || !form.percent || !form.starts_at || !form.ends_at) {
+            Swal.fire({ icon: 'warning', title: 'Champs manquants', text: 'Veuillez remplir tous les champs.', confirmButtonColor: '#000' });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($scope: String!, $target_id: ID!, $percent: Float!, $starts_at: String!, $ends_at: String!) {
+                        createDiscount(scope: $scope, target_id: $target_id, percent: $percent, starts_at: $starts_at, ends_at: $ends_at) { id }
+                    }`,
+                    variables: { ...form, percent: parseFloat(form.percent) }
+                })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+            setForm({ ...emptyForm });
+            fetchAll();
+        } catch (err: any) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err?.message || 'La création a échoué.', confirmButtonColor: '#000' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async (d: any) => {
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Supprimer cette promotion ?',
+            html: `<b>-${d.percent}%</b> sur <b>${d.target_name}</b>`,
+            showCancelButton: true,
+            confirmButtonText: 'Supprimer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#dc2626'
+        });
+        if (!confirm.isConfirmed) return;
+
+        await fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: `mutation($id: ID!) { deleteDiscount(id: $id) }`,
+                variables: { id: d.id }
+            })
+        });
+        fetchAll();
+    };
+
+    const scopeLabel: Record<string, string> = {
+        category: 'Catégorie',
+        subcategory: 'Sous-catégorie',
+        product: 'Produit'
+    };
+
+    if (loading) return <div className="p-20 text-center text-gray-300 font-light tracking-[0.3em] uppercase">Chargement des promotions...</div>;
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-4">
+                <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl">
+                    <h3 className="text-xl font-light mb-6">Nouvelle Promotion</h3>
+                    <form onSubmit={handleCreate} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">Appliquer à</label>
+                            <select
+                                value={form.scope}
+                                onChange={e => setForm({ ...form, scope: e.target.value, target_id: '' })}
+                                className="w-full h-14 bg-gray-50 rounded-2xl px-5 text-sm font-medium border border-transparent focus:border-black focus:bg-white transition-all outline-none"
+                            >
+                                <option value="category">Une catégorie</option>
+                                <option value="subcategory">Une sous-catégorie</option>
+                                <option value="product">Un produit</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">{scopeLabel[form.scope]}</label>
+                            <select
+                                value={form.target_id}
+                                onChange={e => setForm({ ...form, target_id: e.target.value })}
+                                className="w-full h-14 bg-gray-50 rounded-2xl px-5 text-sm font-medium border border-transparent focus:border-black focus:bg-white transition-all outline-none"
+                            >
+                                <option value="">Sélectionner…</option>
+                                {targetOptions.map((o: any) => (
+                                    <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">Remise (%)</label>
+                            <div className="relative">
+                                <input
+                                    type="number" min="1" max="100" step="0.01"
+                                    value={form.percent}
+                                    onChange={e => setForm({ ...form, percent: e.target.value })}
+                                    placeholder="ex: 40"
+                                    className="w-full h-14 bg-gray-50 rounded-2xl px-5 pr-12 text-sm font-medium border border-transparent focus:border-black focus:bg-white transition-all outline-none"
+                                />
+                                <span className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">%</span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">Début</label>
+                                <input
+                                    type="date"
+                                    value={form.starts_at}
+                                    onChange={e => setForm({ ...form, starts_at: e.target.value })}
+                                    className="w-full h-14 bg-gray-50 rounded-2xl px-4 text-sm font-medium border border-transparent focus:border-black focus:bg-white transition-all outline-none"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold tracking-widest text-black/40 uppercase px-2">Fin</label>
+                                <input
+                                    type="date"
+                                    value={form.ends_at}
+                                    min={form.starts_at}
+                                    onChange={e => setForm({ ...form, ends_at: e.target.value })}
+                                    className="w-full h-14 bg-gray-50 rounded-2xl px-4 text-sm font-medium border border-transparent focus:border-black focus:bg-white transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <p className="text-[10px] text-gray-400 leading-relaxed px-2">
+                            La remise s'active et s'arrête automatiquement à ces dates. Les dates ne sont jamais affichées aux clients.
+                        </p>
+
+                        <button
+                            type="submit"
+                            disabled={isSaving}
+                            className="w-full h-14 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2 disabled:opacity-40"
+                        >
+                            {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Plus size={14} />}
+                            Ajouter
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div className="lg:col-span-8">
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-50 bg-white/50 backdrop-blur-md">
+                        <h3 className="text-xl font-light tracking-tight">Promotions</h3>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                            {discounts.filter(d => d.is_active).length} active(s) · {discounts.length} au total
+                        </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="bg-gray-50/50">
+                                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Remise</th>
+                                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Cible</th>
+                                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Période</th>
+                                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Statut</th>
+                                    <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {discounts.map(d => (
+                                    <tr key={d.id} className="hover:bg-gray-50/30 transition-colors">
+                                        <td className="px-8 py-6">
+                                            <span className="text-sm font-black text-pink-600">-{Number(d.percent)}%</span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="text-sm font-medium text-gray-800">{d.target_name || `#${d.target_id}`}</div>
+                                            <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                                                {scopeLabel[d.scope]} · {d.product_count} produit(s)
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="text-[11px] font-medium text-gray-500">
+                                                {d.starts_at} → {d.ends_at}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${d.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                {d.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6 text-right">
+                                            <button
+                                                onClick={() => handleDelete(d)}
+                                                className="text-gray-300 hover:text-red-500 transition-colors"
+                                                title="Supprimer la promotion"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {discounts.length === 0 && (
+                            <div className="p-20 text-center text-gray-300 font-light italic">
+                                Aucune promotion pour le moment.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function CategoryManager() {
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -2535,7 +2800,7 @@ function CategoryManager() {
                                                                 if (e.key === 'Escape') cancelEdit();
                                                             }}
                                                             size={Math.max(draftName.length, 6)}
-                                                            className="text-xs font-bold text-gray-700 uppercase tracking-widest bg-transparent border-b border-black outline-none min-w-0"
+                                                            className="text-xs font-bold text-gray-700 tracking-widest bg-transparent border-b border-black outline-none min-w-0"
                                                         />
                                                         <button
                                                             onClick={() => handleRename('sub', sub.id, sub.name)}
@@ -2568,7 +2833,7 @@ function CategoryManager() {
                                                         <button
                                                             onClick={() => startEditSub(sub)}
                                                             title="Cliquer pour renommer"
-                                                            className="text-xs font-bold text-gray-600 uppercase tracking-widest hover:text-black transition-colors"
+                                                            className="text-xs font-bold text-gray-600 tracking-widest hover:text-black transition-colors"
                                                         >
                                                             {sub.name}
                                                         </button>
@@ -2598,7 +2863,9 @@ function CategoryManager() {
                                         <input
                                             type="text"
                                             placeholder="+ Ajouter sous-catégorie"
-                                            className="w-full bg-white border border-gray-100 rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest focus:border-black outline-none transition-all pr-12"
+                                            // No `uppercase`: the field must show the exact casing being
+                                            // typed, since that is what gets saved.
+                                            className="w-full bg-white border border-gray-100 rounded-full px-5 py-2 text-[10px] font-bold tracking-widest focus:border-black outline-none transition-all pr-12 placeholder:uppercase"
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
                                                     handleAddSub(cat.id, (e.target as HTMLInputElement).value);

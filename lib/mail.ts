@@ -63,7 +63,12 @@ export async function verifySmtp() {
     }
 }
 
-export async function sendEmail({ from, to, subject, content, images }: { from: string, to: string[], subject: string, content: string, images: string[] }) {
+/** Escapes user/admin-supplied text before it goes into the HTML part. */
+function escapeHtml(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export async function sendEmail({ from, to, subject, content, images, unsubscribeEmail }: { from: string, to: string[], subject: string, content: string, images: string[], unsubscribeEmail?: string }) {
     const { transporter, SMTP_HOST, SMTP_USER, SMTP_FROM_NAME } = await resolveSmtpConfig(from);
 
     const attachments = (images || []).map((img, i) => {
@@ -81,17 +86,44 @@ export async function sendEmail({ from, to, subject, content, images }: { from: 
         return null;
     }).filter(Boolean) as any[];
 
+    const siteUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+    // Mailto unsubscribe works without a public site; the URL form is added only
+    // when the site is actually reachable (not localhost).
+    const isPublicSite = /^https?:\/\//.test(siteUrl) && !/localhost|127\.0\.0\.1/.test(siteUrl);
+
+    const unsubMailto = `<mailto:${SMTP_USER}?subject=Unsubscribe>`;
+    const unsubUrl = isPublicSite && unsubscribeEmail
+        ? `, <${siteUrl}/unsubscribe?email=${encodeURIComponent(unsubscribeEmail)}>`
+        : '';
+
     const mailOptions = {
         from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
+        // Always address the recipient explicitly in To:. A message with no To:
+        // header (BCC-only) is filed away from the inbox by Gmail and often
+        // scored as bulk. Callers send one message per recipient, so this never
+        // exposes one customer's address to another.
         to: to.join(', '),
+        replyTo: SMTP_USER,
         subject: subject,
-        text: content,
+        // A plain-text part alongside the HTML markedly improves deliverability;
+        // HTML-only messages score worse with spam filters.
+        text: `${content}\n\n---\nPour ne plus recevoir ces e-mails, répondez avec pour objet "Unsubscribe".`,
         html: `
             <div style="font-family: sans-serif; padding: 20px; color: #333;">
-                <p>${content.replace(/\n/g, '<br>')}</p>
+                <p>${escapeHtml(content).replace(/\n/g, '<br>')}</p>
                 ${attachments.length > 0 ? '<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">' : ''}
+                <p style="font-size:12px;color:#888;margin-top:24px;border-top:1px solid #eee;padding-top:12px;">
+                    ${escapeHtml(SMTP_FROM_NAME)}${isPublicSite ? ` — <a href="${siteUrl}" style="color:#888;">${siteUrl}</a>` : ''}<br>
+                    Pour ne plus recevoir ces e-mails, répondez à ce message avec pour objet «&nbsp;Unsubscribe&nbsp;».
+                </p>
             </div>
         `,
+        headers: {
+            // Tells Gmail/Outlook this is bulk mail with a genuine opt-out, which
+            // is what they look for before showing the one-click unsubscribe.
+            'List-Unsubscribe': `${unsubMailto}${unsubUrl}`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
         attachments
     };
 

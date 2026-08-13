@@ -1596,6 +1596,29 @@
     margin-top: 5px;
 }
 
+/* Pre-discount price, struck through beside the reduced one. */
+.oldPrice {
+    margin-left: 8px;
+    text-decoration: line-through;
+    color: #999;
+    font-weight: 400;
+    font-size: 0.85em;
+}
+
+/* "-40%" badge beside a discounted price. */
+.discountBadgeSmall {
+    margin-left: 8px;
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #fce7f3;
+    color: #be185d;
+    font-size: 0.75em;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+}
+
 /* Per-unit price shown beside the line total when quantity > 1. */
 .cartUnitPrice {
     font-weight: 500;

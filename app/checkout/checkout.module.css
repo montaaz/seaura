@@ -81,7 +81,8 @@
     transition: border-color 0.3s;
 }
 
-.formGroup input:focus {
+.formGroup input:focus,
+.formGroup select:focus {
     outline: none;
     border-color: #000;
 }

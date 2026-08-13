@@ -36,6 +36,94 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   Form controls: selects and date inputs
+   Native <select> and <input type="date"> render with OS chrome (grey
+   gradients, a system chevron, a blue-highlighted option list). These
+   rules replace that with the site's own look while keeping the native
+   elements — so mobile still opens the OS picker, and keyboard access
+   and form semantics are untouched.
+   ------------------------------------------------------------------ */
+
+select {
+  /* Strip the platform's arrow and background, then draw our own chevron. */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23111' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1.25rem center;
+  background-size: 12px 8px;
+  /* !important: most selects here carry a Tailwind px-* utility, which would
+     otherwise win and let the text run under the chevron. */
+  padding-right: 3rem !important;
+  cursor: pointer;
+  color: inherit;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The popup list. Firefox and Chromium honour these; Safari keeps its own
+   native list, which is acceptable — the closed control still matches. */
+select option {
+  background-color: #fff;
+  color: #111;
+  padding: 0.75rem 1rem;
+  font-weight: 500;
+}
+
+select option:checked,
+select option:hover {
+  background-color: #111;
+  color: #fff;
+}
+
+select option:disabled {
+  color: #bbb;
+}
+
+/* Date inputs: hide the dull native icon and use our own calendar glyph,
+   so the field matches the selects beside it. */
+input[type="date"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  position: relative;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 16px 16px;
+  /* !important for the same reason as the select above. */
+  padding-right: 2.75rem !important;
+}
+
+/* Stretch the invisible native button across the field so clicking
+   anywhere opens the picker, not just the (now hidden) icon. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  padding: 0;
+}
+
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button {
+  display: none;
+  -webkit-appearance: none;
+}
+
 /* Utility Overrides */
 @layer utilities {
   .glass {

@@ -10,6 +10,37 @@ import * as bcrypt from 'bcrypt';
 // First-order discount. One use per email address, ever.
 const FIRST_ORDER_DISCOUNT_PERCENT = 10;
 
+/**
+ * SQL that resolves the single active discount percentage for each product.
+ *
+ * Precedence is "most specific wins": a product rule beats a sub-category rule,
+ * which beats a category rule. Ties inside the same scope go to the larger
+ * percentage. Only rules whose date window covers today are considered, so
+ * discounts start and expire on their own with no cron job.
+ *
+ * Exposed as a joinable fragment (alias `d`) so the products, product and
+ * order paths all price identically.
+ */
+const ACTIVE_DISCOUNT_JOIN = `
+  LEFT JOIN LATERAL (
+    SELECT dd.percent
+    FROM discounts dd
+    WHERE CURRENT_DATE BETWEEN dd.starts_at AND dd.ends_at
+      AND (
+        (dd.scope = 'product'     AND dd.target_id = p.id)
+        OR (dd.scope = 'subcategory' AND dd.target_id = p.sub_category_id)
+        OR (dd.scope = 'category'    AND dd.target_id = p.category_id)
+      )
+    ORDER BY CASE dd.scope WHEN 'product' THEN 0 WHEN 'subcategory' THEN 1 ELSE 2 END,
+             dd.percent DESC
+    LIMIT 1
+  ) d ON TRUE
+`;
+
+/** Price after an active discount, rounded to cents. */
+const discountedPrice = (price: number, percent: number | null) =>
+  percent ? Number((price - (price * percent) / 100).toFixed(2)) : Number(price);
+
 /** The back-in-stock email, shared by the automatic and manual send paths. */
 const backInStockMail = (product: { id: any; name: string }, to: string) => {
   const siteUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '';
@@ -23,7 +54,8 @@ const backInStockMail = (product: { id: any; name: string }, to: string) => {
       `${product.name} est de nouveau en stock.\n\n` +
       (link ? `Commandez ici : ${link}\n\n` : '') +
       `Les quantités sont limitées.\n\nSEAURA`,
-    images: [] as string[]
+    images: [] as string[],
+    unsubscribeEmail: to
   };
 };
 
@@ -194,6 +226,10 @@ const typeDefs = gql`
     image_url: String
     category_id: ID
     sub_category_id: ID
+    "Original price before any active discount, or null when not discounted."
+    original_price: Float
+    "Active discount percentage, or null. The date window is never exposed."
+    discount_percent: Float
     colors: [Color!]
     images: [String!]
     sizes: [String!]
@@ -243,6 +279,21 @@ const typeDefs = gql`
   type DiscountEligibility {
     eligible: Boolean!
     percent: Int!
+  }
+
+  "A percentage discount scoped to a category, sub-category or product. Admin-only."
+  type Discount {
+    id: ID!
+    scope: String!
+    target_id: ID!
+    target_name: String
+    percent: Float!
+    starts_at: String!
+    ends_at: String!
+    "Derived: whether today falls inside the date window."
+    is_active: Boolean!
+    "How many products this rule currently prices."
+    product_count: Int
   }
 
   "A shopper waiting to hear that a product is back in stock."
@@ -319,6 +370,7 @@ const typeDefs = gql`
     users: [UserWithStats!]!
     firstOrderDiscount(email: String!): DiscountEligibility!
     stockNotifications: [StockNotification!]!
+    discounts: [Discount!]!
     "Verifies the stored SMTP credentials without sending a message."
     testSmtpConnection: String!
   }
@@ -348,6 +400,8 @@ const typeDefs = gql`
     updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
     deleteSubCategory(id: ID!): Boolean!
     notifyWhenAvailable(product_id: ID!, email: String!): Boolean!
+    createDiscount(scope: String!, target_id: ID!, percent: Float!, starts_at: String!, ends_at: String!): Discount!
+    deleteDiscount(id: ID!): Boolean!
     sendStockNotification(id: ID!): Boolean!
     deleteStockNotification(id: ID!): Boolean!
     moveCategory(id: ID!, direction: String!): Boolean!
@@ -372,16 +426,24 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, sub_category_id, colors, sizes, has_sizes, stock, created_at,
-               left(md5(coalesce(image_url,'') || coalesce(images::text,'')), 8) AS v,
+        SELECT p.id, p.name, p.price, p.description, p.category_id, p.sub_category_id,
+               p.colors, p.sizes, p.has_sizes, p.stock, p.created_at,
+               left(md5(coalesce(p.image_url,'') || coalesce(p.images::text,'')), 8) AS v,
                -- Count only, so the multi-MB base64 blobs stay out of this query.
-               jsonb_array_length(coalesce(images, '[]'::jsonb)) AS image_count
-        FROM products
-        ORDER BY created_at DESC
+               jsonb_array_length(coalesce(p.images, '[]'::jsonb)) AS image_count,
+               d.percent AS discount_percent
+        FROM products p
+        ${ACTIVE_DISCOUNT_JOIN}
+        ORDER BY p.created_at DESC
         ${limitStr}
       `);
       return res.rows.map((r: any) => ({
         ...r,
+        // `price` becomes the price customers actually pay; the pre-discount
+        // value moves to original_price so the UI can strike it through.
+        price: discountedPrice(Number(r.price), r.discount_percent),
+        original_price: r.discount_percent ? Number(r.price) : null,
+        discount_percent: r.discount_percent ? Number(r.discount_percent) : null,
         // ?v=<fingerprint> busts the browser cache whenever the stored image
         // changes, so edited product images appear immediately.
         image_url: `/api/image/${r.id}?v=${r.v}`,
@@ -420,6 +482,34 @@ const resolvers = {
     testSmtpConnection: async (_: any, __: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       return verifySmtp();
+    },
+    // Discount rules with the name of whatever they target and how many
+    // products each one currently prices. Admin-only: the date windows are
+    // internal and must never reach the storefront.
+    discounts: async (_: any, __: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(`
+        SELECT dd.id, dd.scope, dd.target_id, dd.percent,
+               dd.starts_at::text, dd.ends_at::text,
+               (CURRENT_DATE BETWEEN dd.starts_at AND dd.ends_at) AS is_active,
+               CASE dd.scope
+                 WHEN 'category'    THEN (SELECT name FROM categories     WHERE id = dd.target_id)
+                 WHEN 'subcategory' THEN (SELECT name FROM sub_categories WHERE id = dd.target_id)
+                 ELSE                    (SELECT name FROM products       WHERE id = dd.target_id)
+               END AS target_name,
+               CASE dd.scope
+                 WHEN 'category'    THEN (SELECT count(*) FROM products WHERE category_id = dd.target_id)
+                 WHEN 'subcategory' THEN (SELECT count(*) FROM products WHERE sub_category_id = dd.target_id)
+                 ELSE 1
+               END AS product_count
+        FROM discounts dd
+        ORDER BY is_active DESC, dd.starts_at DESC, dd.id DESC
+      `);
+      return res.rows.map((r: any) => ({
+        ...r,
+        percent: Number(r.percent),
+        product_count: Number(r.product_count)
+      }));
     },
     // Back-in-stock requests for the admin newsletter view. Pending first, then
     // most recent, so the actionable rows are at the top.
@@ -580,13 +670,20 @@ const resolvers = {
     },
     product: async (_: any, { id }: any) => {
       const res = await query(`
-        SELECT id, name, price, description, category_id, sub_category_id, colors, sizes, has_sizes, image_url, images, stock
-        FROM products WHERE id = $1
+        SELECT p.id, p.name, p.price, p.description, p.category_id, p.sub_category_id,
+               p.colors, p.sizes, p.has_sizes, p.image_url, p.images, p.stock,
+               d.percent AS discount_percent
+        FROM products p
+        ${ACTIVE_DISCOUNT_JOIN}
+        WHERE p.id = $1
       `, [id]);
       const r = res.rows[0];
       if (!r) return null;
       return {
         ...r,
+        price: discountedPrice(Number(r.price), r.discount_percent),
+        original_price: r.discount_percent ? Number(r.price) : null,
+        discount_percent: r.discount_percent ? Number(r.discount_percent) : null,
         images: typeof r.images === 'string' ? JSON.parse(r.images) : r.images
       };
     }
@@ -698,12 +795,21 @@ const resolvers = {
       const ids = items.map((it: any) => it.id).filter(Boolean);
       if (ids.length === 0) throw new Error('Panier invalide.');
 
+      // Prices come with any active discount already applied, so an order is
+      // charged the same amount the storefront advertised.
       const priceRes = await query(
-        "SELECT id, name, price, stock FROM products WHERE id = ANY($1::int[])",
+        `SELECT p.id, p.name, p.price, p.stock, d.percent AS discount_percent
+         FROM products p
+         ${ACTIVE_DISCOUNT_JOIN}
+         WHERE p.id = ANY($1::int[])`,
         [ids]
       );
       const priceById = new Map(
-        priceRes.rows.map((r: any) => [String(r.id), { name: r.name, price: Number(r.price), stock: r.stock }])
+        priceRes.rows.map((r: any) => [String(r.id), {
+          name: r.name,
+          price: discountedPrice(Number(r.price), r.discount_percent),
+          stock: r.stock
+        }])
       );
 
       // Total requested per product across the cart, so two lines of the same
@@ -895,7 +1001,20 @@ const resolvers = {
     sendEmailCampaign: async (_: any, { from, recipients, content, images }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       try {
-        await sendEmail({ from, to: recipients, subject: 'Campaign from SEAURA', content, images });
+        // One message per recipient, paced slightly apart. Bulk blasts from a
+        // single connection are a strong spam signal, and per-recipient sends
+        // let each carry its own unsubscribe link.
+        for (const to of recipients) {
+          await sendEmail({
+            from,
+            to: [to],
+            subject: 'Campaign from SEAURA',
+            content,
+            images,
+            unsubscribeEmail: to
+          });
+          await new Promise(r => setTimeout(r, 300));
+        }
         return true;
       } catch (error) {
         console.error('Email Error:', error);
@@ -965,6 +1084,50 @@ const resolvers = {
          ON CONFLICT DO NOTHING`,
         [product_id, normalized]
       );
+      return true;
+    },
+    createDiscount: async (_: any, { scope, target_id, percent, starts_at, ends_at }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      const scopes: Record<string, string> = {
+        category: 'categories',
+        subcategory: 'sub_categories',
+        product: 'products'
+      };
+      const table = scopes[scope];
+      if (!table) throw new Error("Portée invalide (category, subcategory ou product).");
+
+      const pct = Number(percent);
+      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
+        throw new Error('Le pourcentage doit être compris entre 1 et 100.');
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(starts_at) || !/^\d{4}-\d{2}-\d{2}$/.test(ends_at)) {
+        throw new Error('Dates invalides (format attendu: AAAA-MM-JJ).');
+      }
+      if (ends_at < starts_at) {
+        throw new Error('La date de fin doit être postérieure à la date de début.');
+      }
+
+      // Table name comes from the whitelist above, never from user input.
+      const exists = await query(`SELECT name FROM ${table} WHERE id = $1`, [target_id]);
+      if (exists.rowCount === 0) throw new Error('Cible introuvable.');
+
+      const res = await query(
+        `INSERT INTO discounts (scope, target_id, percent, starts_at, ends_at)
+         VALUES ($1, $2, $3, $4::date, $5::date)
+         RETURNING id, scope, target_id, percent, starts_at::text, ends_at::text,
+                   (CURRENT_DATE BETWEEN starts_at AND ends_at) AS is_active`,
+        [scope, target_id, pct, starts_at, ends_at]
+      );
+      return {
+        ...res.rows[0],
+        percent: Number(res.rows[0].percent),
+        target_name: exists.rows[0].name
+      };
+    },
+    deleteDiscount: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM discounts WHERE id = $1", [id]);
       return true;
     },
     // Sends one pending back-in-stock alert on demand, so the admin can notify a

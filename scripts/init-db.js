@@ -88,6 +88,10 @@ async function init() {
       ['hero_title', 'NEW IN', 'TEXT', 'hero'],
       ['hero_link_text', "Plus d'informations", 'TEXT', 'hero'],
       ['newsletter_title', 'Abonnez-vous à notre newsletter', 'TEXT', 'newsletter'],
+      ['newsletter_modal_image', '/images/hero.png', 'IMAGE', 'newsletter'],
+      ['welcome_title', 'WELCOME TO SEAURA', 'TEXT', 'welcome'],
+      // *asterisks* render as italics on the homepage.
+      ['welcome_text', 'Introducing our latest limited edition edit. Handcrafted in our studio and designed to make you feel confident, effortlessly refined and *entirely yourself.*', 'TEXT', 'welcome'],
       ['hero_image_1', '/images/hero.png', 'IMAGE', 'hero'],
       ['hero_image_2', '/images/clothing.png', 'IMAGE', 'hero'],
       ['cat1_title', 'SACS', 'TEXT', 'categories'],

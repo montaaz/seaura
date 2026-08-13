@@ -104,7 +104,7 @@ function ShopListing() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id sub_category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price original_price discount_percent image_url images category_id sub_category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -371,6 +371,12 @@ function ShopListing() {
                             </div>
                             <div className={styles.gridPrice}>
                                 {parseFloat(p.price).toFixed(2)} <span className={styles.currency}>dt</span>
+                                {p.original_price && (
+                                    <>
+                                        <span className={styles.oldPrice}>{parseFloat(p.original_price).toFixed(2)} dt</span>
+                                        <span className={styles.discountBadgeSmall}>-{Number(p.discount_percent)}%</span>
+                                    </>
+                                )}
                             </div>
                             {p.colors && p.colors.length > 0 && (
                                 <div className={styles.gridColors}>

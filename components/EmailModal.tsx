@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { X as CloseIcon, ArrowRight } from "lucide-react";
 import Swal from "sweetalert2";
@@ -11,6 +11,29 @@ export default function EmailModal() {
     const { isEmailModalOpen, setIsEmailModalOpen, setUserEmail, markEmailModalSeen } = useUser();
     const [email, setEmail] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Visual is editable from the admin Live Editor. Falls back to the bundled
+    // asset so the modal always renders, even before the CMS value loads.
+    const [visual, setVisual] = useState("/images/hero.png");
+
+    // Fetched when the modal opens rather than on mount: this component is
+    // always rendered, and the image is only needed once it is actually shown.
+    useEffect(() => {
+        if (!isEmailModalOpen) return;
+        let cancelled = false;
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ homeContent { key value } }' })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (cancelled) return;
+                const row = (data.data?.homeContent || []).find((c: any) => c.key === 'newsletter_modal_image');
+                if (row?.value) setVisual(row.value);
+            })
+            .catch(() => { });
+        return () => { cancelled = true; };
+    }, [isEmailModalOpen]);
 
     if (!isEmailModalOpen) return null;
 
@@ -75,7 +98,7 @@ export default function EmailModal() {
 
                 <div className={styles.modalBody}>
                     <div className={styles.modalVisual}>
-                        <Image src="/images/hero.png" alt="Join Seaura" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
+                        <Image src={visual} alt="Join Seaura" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                     </div>
 
                     <div className={styles.modalText}>
