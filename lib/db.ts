@@ -69,6 +69,9 @@ export const initDb = async () => {
 
       ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
       ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url TEXT;
+      -- Admin-controlled display order for the storefront menu.
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER;
+      ALTER TABLE sub_categories ADD COLUMN IF NOT EXISTS sort_order INTEGER;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS sizes JSONB DEFAULT '[]';
       ALTER TABLE products ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]';
@@ -78,6 +81,10 @@ export const initDb = async () => {
       ALTER TABLE products ADD COLUMN IF NOT EXISTS has_sizes BOOLEAN DEFAULT TRUE;
 
       -- Order columns
+      -- First-order discount: recorded per order so the amount granted is
+      -- auditable and the total can be reconstructed from the stored parts.
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10, 2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_percent INTEGER DEFAULT 0;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT;
@@ -102,6 +109,17 @@ export const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- "Notify me when available" requests. One pending row per
+      -- (product, email); notified_at is stamped when the mail goes out so the
+      -- same request is never sent twice.
+      CREATE TABLE IF NOT EXISTS stock_notifications (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+        email VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        notified_at TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS chat_sessions (
         id SERIAL PRIMARY KEY,
         user_email VARCHAR(255) NOT NULL,
@@ -118,9 +136,35 @@ export const initDb = async () => {
 
     `);
 
+    // Backfill sort_order for rows created before the column existed, keeping
+    // the alphabetical order they were displayed in until an admin reorders.
+    await client.query(`
+      UPDATE categories c SET sort_order = o.rn
+      FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY name ASC) AS rn FROM categories WHERE sort_order IS NULL) o
+      WHERE c.id = o.id AND c.sort_order IS NULL;
+
+      UPDATE sub_categories s SET sort_order = o.rn
+      FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY name ASC) AS rn FROM sub_categories WHERE sort_order IS NULL) o
+      WHERE s.id = o.id AND s.sort_order IS NULL;
+    `);
+
     // Performance Optimizations (Handled separately to prevent failure on permission issues)
     try {
       await client.query(`
+        -- Backs the first-order eligibility lookup, which matches on lowercased email.
+        CREATE INDEX IF NOT EXISTS idx_orders_customer_email_lower ON orders (lower(customer_email));
+        -- One outstanding stock alert per product/email. Partial, so a shopper can
+        -- subscribe again after being notified for an earlier restock.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_stock_notif_pending
+          ON stock_notifications (product_id, lower(email))
+          WHERE notified_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_stock_notif_product_pending
+          ON stock_notifications (product_id) WHERE notified_at IS NULL;
+        -- Hard guarantee that the first-order discount is granted at most once per
+        -- email, even if two checkouts race past the application-level check.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_one_discount_per_email
+          ON orders (lower(customer_email))
+          WHERE discount_amount > 0;
         CREATE EXTENSION IF NOT EXISTS pg_trgm;
         CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING GIN (name gin_trgm_ops);
         CREATE INDEX IF NOT EXISTS idx_products_description_trgm ON products USING GIN (description gin_trgm_ops);

@@ -163,7 +163,7 @@ export default function Header({
                                                 onClick={() => setIsMenuOpen(false)}
                                                 className={styles.catLink}
                                             >
-                                                {cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase()}
+                                                {cat.name}
                                             </Link>
                                             {hasSubs && (
                                                 <button
@@ -183,7 +183,7 @@ export default function Header({
                                                             href={`/shop?category=${cat.id}&sub_category=${sub.id}`}
                                                             onClick={() => setIsMenuOpen(false)}
                                                         >
-                                                            {sub.name.toUpperCase()}
+                                                            {sub.name}
                                                         </Link>
                                                     </li>
                                                 ))}

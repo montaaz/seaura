@@ -47,11 +47,12 @@ const HeroSection = React.memo(({ cmsContent, heroImages, currentHeroIndex }: an
   </section>
 ));
 
-const FeaturedProductsSection = React.memo(({ products }: { products: any[] }) => {
+const FeaturedProductsSection = React.memo(({ products, title }: { products: any[]; title?: string }) => {
   const reviews = [3, 5, 1, 4];
   return (
     <section className={styles.featuredProducts}>
-      <h2 className={styles.featuredTitle}>DESIGN YOUR OWN</h2>
+      {/* Editable from the admin (Live Editor → featured). */}
+      <h2 className={styles.featuredTitle}>{title || "DESIGN YOUR OWN"}</h2>
       <div className={styles.sliderWrapper}>
         <div className={styles.productsGrid} id="featuredGrid">
           {products.slice(0, 8).map((product, idx) => (
@@ -152,6 +153,12 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
   const scrollDirection = useRef(-1); // -1 for RTL, 1 for LTR
   const velocity = useRef(-0.8); // Current movement velocity
   const requestRef = useRef<number | null>(null);
+
+  // Editable from the admin (Live Editor → instagram); falls back to the
+  // original copy when the CMS row hasn't been created yet.
+  const heading = cmsContent.instagram_heading || "JOIN OUR JOURNEY";
+  const subtext = cmsContent.instagram_subtext
+    || "Keep up to date with everything With Lyberty - from our journey to the way each collection comes to life";
 
   const posts = useMemo(() => {
     const keys = Object.keys(cmsContent)
@@ -276,8 +283,8 @@ const InstagramSection = React.memo(({ cmsContent }: any) => {
       }}
     >
       <div className={styles.instaTextContainer}>
-        <h2 className={styles.instaHeading}>JOIN OUR JOURNEY</h2>
-        <p className={styles.instaSubtext}>Keep up to date with everything With Lyberty - from our journey to the way each collection comes to life</p>
+        <h2 className={styles.instaHeading}>{heading}</h2>
+        <p className={styles.instaSubtext}>{subtext}</p>
       </div>
 
       <div
@@ -503,7 +510,7 @@ export default function Home() {
       </section>
 
       {/* Featured Products Section (Now under Video) */}
-      <FeaturedProductsSection products={featuredProducts} />
+      <FeaturedProductsSection products={featuredProducts} title={cmsContent.featured_title} />
 
       {/* Instagram Feed Section */}
       <InstagramSection cmsContent={cmsContent} />

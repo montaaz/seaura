@@ -395,7 +395,7 @@
   font-size: 32px;
   font-weight: 500;
   margin-bottom: 0;
-  text-transform: lowercase;
+  /* No text-transform: category names display exactly as the admin typed them. */
 }
 
 .cardLink {

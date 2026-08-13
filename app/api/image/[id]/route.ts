@@ -54,6 +54,20 @@ export async function GET(
             rawValue = type === 'category' ? data.image_url : (type === 'subcategory' ? data.image_url : data.value);
         }
 
+        // Home slots of type JSON (e.g. instagram_post_N) store their picture
+        // inside an `image_url` field rather than as the whole value. Unwrap it
+        // so the embedded base64 can be served like any other image.
+        if (type === 'home' && typeof rawValue === 'string' && rawValue.trimStart().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(rawValue);
+                if (typeof parsed?.image_url === 'string' && parsed.image_url.length > 0) {
+                    rawValue = parsed.image_url;
+                }
+            } catch {
+                // Not JSON after all — fall through with the raw value.
+            }
+        }
+
         // Guard against a corrupted self-referential value (e.g. a
         // "/api/image/8" proxy placeholder that got saved back into image_url).
         // Serving it would loop the proxy back onto itself forever.

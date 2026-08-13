@@ -4,8 +4,144 @@ import { gql } from 'graphql-tag';
 import { query, initDb } from '@/lib/db';
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth';
 import { getServerSession } from "next-auth/next";
-import { sendEmail } from '@/lib/mail';
+import { sendEmail, verifySmtp } from '@/lib/mail';
 import * as bcrypt from 'bcrypt';
+
+// First-order discount. One use per email address, ever.
+const FIRST_ORDER_DISCOUNT_PERCENT = 10;
+
+/** The back-in-stock email, shared by the automatic and manual send paths. */
+const backInStockMail = (product: { id: any; name: string }, to: string) => {
+  const siteUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '';
+  const link = siteUrl ? `${siteUrl.replace(/\/$/, '')}/shop/${product.id}` : '';
+  return {
+    from: 'SEAURA',
+    to: [to],
+    subject: `${product.name} est de nouveau disponible`,
+    content:
+      `Bonne nouvelle !\n\n` +
+      `${product.name} est de nouveau en stock.\n\n` +
+      (link ? `Commandez ici : ${link}\n\n` : '') +
+      `Les quantités sont limitées.\n\nSEAURA`,
+    images: [] as string[]
+  };
+};
+
+/**
+ * Emails everyone waiting on `productId` that it is back in stock, then marks
+ * their requests notified so they are never mailed twice.
+ *
+ * Rows are claimed with a single UPDATE ... RETURNING before any mail is sent:
+ * that way two concurrent restocks cannot both pick up the same recipients.
+ * Failures roll the claim back so the alert is retried on the next restock
+ * rather than silently lost.
+ */
+const notifyBackInStock = async (productId: string | number) => {
+  const prod = await query("SELECT id, name, stock FROM products WHERE id = $1", [productId]);
+  const product = prod.rows[0];
+  if (!product || product.stock <= 0) return 0;
+
+  const claimed = await query(
+    `UPDATE stock_notifications
+     SET notified_at = CURRENT_TIMESTAMP
+     WHERE product_id = $1 AND notified_at IS NULL
+     RETURNING id, email`,
+    [productId]
+  );
+  if (claimed.rowCount === 0) return 0;
+
+  const recipients: string[] = claimed.rows.map((r: any) => r.email);
+  const ids: number[] = claimed.rows.map((r: any) => r.id);
+
+  try {
+    // One mail per recipient so addresses are not disclosed to each other.
+    for (const to of recipients) {
+      await sendEmail(backInStockMail(product, to));
+    }
+  } catch (err) {
+    // Un-claim so the next restock retries instead of dropping the alert.
+    await query(
+      "UPDATE stock_notifications SET notified_at = NULL WHERE id = ANY($1::int[])",
+      [ids]
+    );
+    console.error('Failed to send back-in-stock emails:', err);
+    return 0;
+  }
+
+  return recipients.length;
+};
+
+/**
+ * True when this email has never placed an order that counts as "used".
+ * Cancelled orders are ignored, so a customer whose order fell through can
+ * still claim the discount later.
+ *
+ * Matching is case-insensitive and trimmed: Foo@Bar.com and foo@bar.com are
+ * the same customer and must not each get a first order.
+ */
+const isFirstOrderEmail = async (email?: string | null) => {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized) return false;
+
+  const res = await query(
+    `SELECT 1 FROM orders
+     WHERE lower(customer_email) = $1
+       AND coalesce(status, '') <> 'CANCELLED'
+     LIMIT 1`,
+    [normalized]
+  );
+  return res.rowCount === 0;
+};
+
+/**
+ * Swaps a row's sort_order with the sibling directly above ('up') or below
+ * ('down') it in the displayed order. Siblings are all categories, or — for
+ * sub_categories — the rows sharing the same category_id.
+ *
+ * The order is normalised to 1..n first so rows that never received a
+ * sort_order (NULL) still have a well-defined position to swap against.
+ * Returns false when the row is already at the edge, which is a no-op.
+ */
+const swapSortOrder = async (table: 'categories' | 'sub_categories', id: string, direction: 'up' | 'down') => {
+  // Restricts both statements to the sibling group. `scopedAnd` qualifies the
+  // column with the `n` alias, since an unqualified name there would bind to the
+  // outer table. Categories have no scope, so the normalise query then takes no
+  // parameters at all.
+  const isSub = table === 'sub_categories';
+  const parent = `(SELECT category_id FROM sub_categories WHERE id = $1)`;
+  const scope = isSub ? `WHERE category_id = ${parent}` : '';
+  const scopedAnd = isSub ? `n.category_id = ${parent} AND` : '';
+
+  await query(`
+    UPDATE ${table} t SET sort_order = o.rn
+    FROM (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY sort_order ASC NULLS LAST, name ASC) AS rn
+      FROM ${table} ${scope}
+    ) o
+    WHERE t.id = o.id AND t.sort_order IS DISTINCT FROM o.rn
+  `, isSub ? [id] : []);
+
+  const comparator = direction === 'up' ? '<' : '>';
+  const neighbourOrder = direction === 'up' ? 'DESC' : 'ASC';
+
+  const res = await query(`
+    WITH current AS (SELECT id, sort_order FROM ${table} WHERE id = $1),
+    neighbour AS (
+      SELECT n.id, n.sort_order FROM ${table} n, current c
+      WHERE ${scopedAnd} n.sort_order ${comparator} c.sort_order
+      ORDER BY n.sort_order ${neighbourOrder}
+      LIMIT 1
+    )
+    UPDATE ${table} u
+    SET sort_order = CASE WHEN u.id = (SELECT id FROM current) THEN (SELECT sort_order FROM neighbour)
+                          ELSE (SELECT sort_order FROM current) END
+    WHERE u.id IN (SELECT id FROM current UNION SELECT id FROM neighbour)
+      AND EXISTS (SELECT 1 FROM neighbour)
+    RETURNING u.id
+  `, [id]);
+
+  return res.rowCount === 2;
+};
 
 const typeDefs = gql`
   type User {
@@ -28,6 +164,7 @@ const typeDefs = gql`
     id: ID!
     name: String!
     image_url: String
+    sort_order: Int
     sub_categories: [SubCategory!]
   }
 
@@ -36,6 +173,7 @@ const typeDefs = gql`
     name: String!
     category_id: ID!
     image_url: String
+    sort_order: Int
   }
 
   type Color {
@@ -55,6 +193,7 @@ const typeDefs = gql`
     price: Float!
     image_url: String
     category_id: ID
+    sub_category_id: ID
     colors: [Color!]
     images: [String!]
     sizes: [String!]
@@ -92,10 +231,29 @@ const typeDefs = gql`
     customer_email: String
     customer_phone: String
     total: Float!
+    discount_amount: Float
+    discount_percent: Int
     status: String!
     payment_status: String!
     created_at: String
     items: [OrderItem!]
+  }
+
+  "Whether an email still qualifies for the one-time first-order discount."
+  type DiscountEligibility {
+    eligible: Boolean!
+    percent: Int!
+  }
+
+  "A shopper waiting to hear that a product is back in stock."
+  type StockNotification {
+    id: ID!
+    email: String!
+    product_id: ID!
+    product_name: String
+    product_stock: Int
+    created_at: String
+    notified_at: String
   }
 
   type Charge {
@@ -159,11 +317,15 @@ const typeDefs = gql`
     product(id: ID!): Product
     subCategories(categoryId: ID): [SubCategory!]!
     users: [UserWithStats!]!
+    firstOrderDiscount(email: String!): DiscountEligibility!
+    stockNotifications: [StockNotification!]!
+    "Verifies the stored SMTP credentials without sending a message."
+    testSmtpConnection: String!
   }
 
   type Mutation {
-    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
-    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
+    createProduct(name: String!, description: String, price: Float!, image_url: String, category_id: ID, sub_category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
+    updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, sub_category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
     deleteProduct(id: ID!): Boolean!
     updateHomeContent(key: String!, value: String!, type: String!, section: String): HomeContent!
     subscribeNewsletter(email: String!): Boolean!
@@ -185,6 +347,11 @@ const typeDefs = gql`
     createSubCategory(name: String!, category_id: ID!, image_url: String): SubCategory!
     updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
     deleteSubCategory(id: ID!): Boolean!
+    notifyWhenAvailable(product_id: ID!, email: String!): Boolean!
+    sendStockNotification(id: ID!): Boolean!
+    deleteStockNotification(id: ID!): Boolean!
+    moveCategory(id: ID!, direction: String!): Boolean!
+    moveSubCategory(id: ID!, direction: String!): Boolean!
     deleteCart(sessionId: String!): Boolean!
     updateUserPassword(id: ID!, password: String!): Boolean!
   }
@@ -205,8 +372,10 @@ const resolvers = {
     products: async (_: any, { limit }: { limit?: number }) => {
       const limitStr = limit ? `LIMIT ${limit}` : '';
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, stock, created_at,
-               left(md5(coalesce(image_url,'') || coalesce(images::text,'')), 8) AS v
+        SELECT id, name, price, description, category_id, sub_category_id, colors, sizes, has_sizes, stock, created_at,
+               left(md5(coalesce(image_url,'') || coalesce(images::text,'')), 8) AS v,
+               -- Count only, so the multi-MB base64 blobs stay out of this query.
+               jsonb_array_length(coalesce(images, '[]'::jsonb)) AS image_count
         FROM products
         ORDER BY created_at DESC
         ${limitStr}
@@ -216,12 +385,19 @@ const resolvers = {
         // ?v=<fingerprint> busts the browser cache whenever the stored image
         // changes, so edited product images appear immediately.
         image_url: `/api/image/${r.id}?v=${r.v}`,
-        images: [`/api/image/${r.id}?idx=0&v=${r.v}`, `/api/image/${r.id}?idx=1&v=${r.v}`]
+        // One proxy URL per stored image, so products with more than two photos
+        // show all of them.
+        images: Array.from(
+          { length: r.image_count },
+          (_, i) => `/api/image/${r.id}?idx=${i}&v=${r.v}`
+        )
       }));
     },
     categories: async () => {
-      const res = await query("SELECT id, name, left(md5(coalesce(image_url,'')), 8) AS v FROM categories ORDER BY name ASC");
-      const subRes = await query("SELECT id, name, category_id, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ORDER BY name ASC");
+      // sort_order is the admin-controlled display order; NULLS LAST + name keeps
+      // rows created before the column existed at the end in a stable order.
+      const res = await query("SELECT id, name, sort_order, left(md5(coalesce(image_url,'')), 8) AS v FROM categories ORDER BY sort_order ASC NULLS LAST, name ASC");
+      const subRes = await query("SELECT id, name, category_id, sort_order, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ORDER BY sort_order ASC NULLS LAST, name ASC");
 
       return res.rows.map((r: any) => ({
         ...r,
@@ -234,10 +410,34 @@ const resolvers = {
           }))
       }));
     },
+    // Lets checkout show the discount before the order is placed. Advisory
+    // only — createOrder re-checks eligibility and recomputes the amount, so a
+    // forged response here cannot grant a discount.
+    firstOrderDiscount: async (_: any, { email }: { email: string }) => ({
+      eligible: await isFirstOrderEmail(email),
+      percent: FIRST_ORDER_DISCOUNT_PERCENT
+    }),
+    testSmtpConnection: async (_: any, __: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      return verifySmtp();
+    },
+    // Back-in-stock requests for the admin newsletter view. Pending first, then
+    // most recent, so the actionable rows are at the top.
+    stockNotifications: async (_: any, __: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      const res = await query(`
+        SELECT sn.id, sn.email, sn.product_id, sn.created_at::text, sn.notified_at::text,
+               p.name AS product_name, p.stock AS product_stock
+        FROM stock_notifications sn
+        LEFT JOIN products p ON p.id = sn.product_id
+        ORDER BY (sn.notified_at IS NOT NULL), sn.created_at DESC
+      `);
+      return res.rows;
+    },
     subCategories: async (_: any, { categoryId }: { categoryId?: string }) => {
       const where = categoryId ? `WHERE category_id = $1` : '';
       const params = categoryId ? [categoryId] : [];
-      const res = await query(`SELECT id, name, category_id, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ${where} ORDER BY name ASC`, params);
+      const res = await query(`SELECT id, name, category_id, sort_order, left(md5(coalesce(image_url,'')), 8) AS v FROM sub_categories ${where} ORDER BY sort_order ASC NULLS LAST, name ASC`, params);
       return res.rows.map((r: any) => ({
         ...r,
         image_url: `/api/image/${r.id}?type=subcategory&v=${r.v}`
@@ -256,14 +456,16 @@ const resolvers = {
           // image gets a new URL and the browser fetches it immediately.
           return { ...r, value: `/api/image/${r.id}?type=home&v=${r.v || 0}` };
         }
-        // Safety net: never ship a giant inline base64 image inside a JSON
-        // slot to the editor — it freezes the DOM. Replace it with a
-        // placeholder so the admin can just re-upload a compressed image.
+        // Never ship a giant inline base64 image inside a JSON slot — it
+        // freezes the DOM. Point at the image proxy instead, which unwraps the
+        // embedded image_url and streams it as real image bytes. (This used to
+        // substitute /logo1.png, which silently discarded whatever the admin
+        // had just uploaded.)
         if (r.type === 'JSON' && typeof r.value === 'string' && r.value.includes('data:image')) {
           try {
             const obj = JSON.parse(r.value);
             if (typeof obj.image_url === 'string' && obj.image_url.startsWith('data:image')) {
-              obj.image_url = '/logo1.png';
+              obj.image_url = `/api/image/${r.id}?type=home&v=${r.v || 0}`;
               return { ...r, value: JSON.stringify(obj) };
             }
           } catch {
@@ -378,7 +580,7 @@ const resolvers = {
     },
     product: async (_: any, { id }: any) => {
       const res = await query(`
-        SELECT id, name, price, description, category_id, colors, sizes, has_sizes, image_url, images, stock
+        SELECT id, name, price, description, category_id, sub_category_id, colors, sizes, has_sizes, image_url, images, stock
         FROM products WHERE id = $1
       `, [id]);
       const r = res.rows[0];
@@ -390,20 +592,35 @@ const resolvers = {
     }
   },
   Mutation: {
-    createProduct: async (_: any, { name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
+    createProduct: async (_: any, { name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO products (name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock || 10]
+        "INSERT INTO products (name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
+        [name, description, price, image_url, category_id, sub_category_id || null, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock || 10]
       );
       return res.rows[0];
     },
-    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
+    updateProduct: async (_: any, { id, name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      // Read the previous stock to detect a restock. Any increase counts, not
+      // just 0 -> positive: shoppers can also subscribe when stock exists but is
+      // fully reserved, and they must be told when more arrives.
+      const prevRes = await query("SELECT stock FROM products WHERE id = $1", [id]);
+      const prevStock = prevRes.rows[0]?.stock ?? 0;
+
       const res = await query(
-        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, colors = $6, images = $7, sizes = $8, has_sizes = $9, stock = $10 WHERE id = $11 RETURNING *",
-        [name, description, price, image_url, category_id, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock, id]
+        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, sub_category_id = $6, colors = $7, images = $8, sizes = $9, has_sizes = $10, stock = $11 WHERE id = $12 RETURNING *",
+        [name, description, price, image_url, category_id, sub_category_id || null, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock, id]
       );
+
+      // Fire and forget: a mail failure must not fail the admin's save.
+      if (res.rows[0]?.stock > prevStock && res.rows[0]?.stock > 0) {
+        notifyBackInStock(id).catch(err =>
+          console.error('Back-in-stock notification failed:', err)
+        );
+      }
+
       return res.rows[0];
     },
     deleteProduct: async (_: any, { id }: any, context: any) => {
@@ -423,6 +640,29 @@ const resolvers = {
         const existing = await query("SELECT * FROM home_content WHERE key = $1", [key]);
         if (existing.rows[0]) return existing.rows[0];
         throw new Error('Refusing to store a proxy URL as an image');
+      }
+
+      // JSON slots (instagram_post_N) carry their picture inside `image_url`.
+      // The editor omits that field when only the link/caption changed, and
+      // never sends back a proxy URL — so merge onto the stored object to keep
+      // the existing image instead of blanking it.
+      if (type === 'JSON' && typeof value === 'string') {
+        try {
+          const incoming = JSON.parse(value);
+          const proxyUrl = typeof incoming?.image_url === 'string' && incoming.image_url.startsWith('/api/image/');
+          if (incoming && typeof incoming === 'object' && (incoming.image_url === undefined || proxyUrl)) {
+            const existing = await query("SELECT value FROM home_content WHERE key = $1", [key]);
+            const prev = existing.rows[0]?.value;
+            if (typeof prev === 'string') {
+              const prevObj = JSON.parse(prev);
+              if (typeof prevObj?.image_url === 'string') {
+                value = JSON.stringify({ ...incoming, image_url: prevObj.image_url });
+              }
+            }
+          }
+        } catch {
+          // Not JSON / no previous row — fall through and store as sent.
+        }
       }
 
       const res = await query(
@@ -459,12 +699,32 @@ const resolvers = {
       if (ids.length === 0) throw new Error('Panier invalide.');
 
       const priceRes = await query(
-        "SELECT id, name, price FROM products WHERE id = ANY($1::int[])",
+        "SELECT id, name, price, stock FROM products WHERE id = ANY($1::int[])",
         [ids]
       );
       const priceById = new Map(
-        priceRes.rows.map((r: any) => [String(r.id), { name: r.name, price: Number(r.price) }])
+        priceRes.rows.map((r: any) => [String(r.id), { name: r.name, price: Number(r.price), stock: r.stock }])
       );
+
+      // Total requested per product across the cart, so two lines of the same
+      // product (different sizes or colors) cannot together exceed stock.
+      const requestedById = new Map<string, number>();
+      for (const it of items) {
+        const key = String(it.id);
+        const qty = Math.max(1, parseInt(it.quantity, 10) || 1);
+        requestedById.set(key, (requestedById.get(key) || 0) + qty);
+      }
+      for (const [productId, requested] of requestedById) {
+        const known = priceById.get(productId);
+        if (!known) throw new Error(`Produit introuvable: ${productId}`);
+        // Never trust the browser's quantities: the cart lives in localStorage
+        // and the request can be replayed by hand.
+        if (typeof known.stock === 'number' && requested > known.stock) {
+          throw new Error(
+            `Stock insuffisant pour ${known.name}: ${requested} demandé(s), ${known.stock} disponible(s).`
+          );
+        }
+      }
 
       const pricedItems = items.map((it: any) => {
         const known = priceById.get(String(it.id));
@@ -478,18 +738,40 @@ const resolvers = {
         };
       });
 
-      const serverTotal = Number(
+      const merchandiseTotal = Number(
         pricedItems.reduce((sum: number, it: any) => sum + it.price * it.quantity, 0).toFixed(2)
       );
+
+      // Eligibility is decided here, never from the client, so the discount
+      // cannot be claimed twice by replaying a request.
+      const eligible = await isFirstOrderEmail(email);
+      const discountPercent = eligible ? FIRST_ORDER_DISCOUNT_PERCENT : 0;
+      const discountAmount = Number(((merchandiseTotal * discountPercent) / 100).toFixed(2));
+      const serverTotal = Number((merchandiseTotal - discountAmount).toFixed(2));
 
       if (typeof total === 'number' && Math.abs(total - serverTotal) > 0.01) {
         console.warn(`Order total mismatch: client sent ${total}, server computed ${serverTotal}`);
       }
 
-      const orderRes = await query(
-        "INSERT INTO orders (user_id, total, status, customer_email, customer_phone, address, city) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *, created_at::text",
-        [userId, serverTotal, 'PENDING', email, phone, address, city]
+      const insertOrder = (dAmount: number, dPercent: number, orderTotal: number) => query(
+        `INSERT INTO orders (user_id, total, discount_amount, discount_percent, status, customer_email, customer_phone, address, city)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *, created_at::text`,
+        [userId, orderTotal, dAmount, dPercent, 'PENDING', email, phone, address, city]
       );
+
+      let orderRes;
+      try {
+        orderRes = await insertOrder(discountAmount, discountPercent, serverTotal);
+      } catch (err: any) {
+        // 23505 = unique violation on the one-discount-per-email index: a
+        // concurrent checkout claimed the discount first. Place the order at
+        // full price rather than failing it.
+        if (err?.code === '23505' && discountAmount > 0) {
+          orderRes = await insertOrder(0, 0, merchandiseTotal);
+        } else {
+          throw err;
+        }
+      }
       const order = orderRes.rows[0];
 
       for (const item of pricedItems) {
@@ -564,8 +846,9 @@ const resolvers = {
     },
     createCategory: async (_: any, { name, image_url }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      // New categories go to the end of the admin-defined order.
       const res = await query(
-        "INSERT INTO categories (name, image_url) VALUES ($1, $2) RETURNING id, name",
+        "INSERT INTO categories (name, image_url, sort_order) VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories)) RETURNING id, name",
         [name, image_url]
       );
       return { 
@@ -637,7 +920,7 @@ const resolvers = {
     createSubCategory: async (_: any, { name, category_id, image_url }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO sub_categories (name, category_id, image_url) VALUES ($1, $2, $3) RETURNING id, name, category_id",
+        "INSERT INTO sub_categories (name, category_id, image_url, sort_order) VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM sub_categories WHERE category_id = $2)) RETURNING id, name, category_id",
         [name, category_id, image_url]
       );
       return { 
@@ -660,6 +943,78 @@ const resolvers = {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       await query("DELETE FROM sub_categories WHERE id = $1", [id]);
       return true;
+    },
+    // Registers a "notify me when available" request. Public: shoppers who hit
+    // a sold-out product are not logged in.
+    notifyWhenAvailable: async (_: any, { product_id, email }: any) => {
+      const normalized = (email || '').trim().toLowerCase();
+      if (!normalized || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
+        throw new Error('Adresse e-mail invalide.');
+      }
+
+      const prod = await query("SELECT id, name, stock FROM products WHERE id = $1", [product_id]);
+      if (prod.rowCount === 0) throw new Error('Produit introuvable.');
+      // Deliberately not requiring stock = 0: a shopper who wants more units
+      // than are currently available has a legitimate reason to be told about
+      // the next restock. The alert fires on the 0 -> in-stock transition.
+
+      // ON CONFLICT keeps this idempotent: subscribing twice is a no-op rather
+      // than an error the shopper has to understand.
+      await query(
+        `INSERT INTO stock_notifications (product_id, email) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [product_id, normalized]
+      );
+      return true;
+    },
+    // Sends one pending back-in-stock alert on demand, so the admin can notify a
+    // shopper without waiting for a stock edit to trigger it.
+    sendStockNotification: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      // Claim first: the row only leaves "pending" if it was still pending, so
+      // an automatic restock running at the same time cannot also send it.
+      const claimed = await query(
+        `UPDATE stock_notifications SET notified_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND notified_at IS NULL
+         RETURNING id, email, product_id`,
+        [id]
+      );
+      if (claimed.rowCount === 0) throw new Error('Cette notification a déjà été envoyée.');
+
+      const row = claimed.rows[0];
+      const prod = await query("SELECT id, name FROM products WHERE id = $1", [row.product_id]);
+      if (prod.rowCount === 0) {
+        await query("UPDATE stock_notifications SET notified_at = NULL WHERE id = $1", [row.id]);
+        throw new Error('Produit introuvable.');
+      }
+
+      try {
+        await sendEmail(backInStockMail(prod.rows[0], row.email));
+      } catch (err: any) {
+        // Restore the pending state so it can be retried.
+        await query("UPDATE stock_notifications SET notified_at = NULL WHERE id = $1", [row.id]);
+        throw new Error(err?.message || "L'envoi de l'e-mail a échoué.");
+      }
+      return true;
+    },
+    deleteStockNotification: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM stock_notifications WHERE id = $1", [id]);
+      return true;
+    },
+    // Moves a category one slot up or down by swapping sort_order with its
+    // neighbour. Sub-categories follow automatically: they are nested under the
+    // category in every query, so they travel with their parent.
+    moveCategory: async (_: any, { id, direction }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      if (direction !== 'up' && direction !== 'down') throw new Error('Invalid direction');
+      return swapSortOrder('categories', id, direction);
+    },
+    moveSubCategory: async (_: any, { id, direction }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      if (direction !== 'up' && direction !== 'down') throw new Error('Invalid direction');
+      return swapSortOrder('sub_categories', id, direction);
     },
     updateUserPassword: async (_: any, { id, password }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');

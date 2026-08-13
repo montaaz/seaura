@@ -35,13 +35,47 @@ import {
     PieChart,
     HelpCircle,
     FileText,
-    Check
+    Check,
+    ChevronUp,
+    ChevronDown
 } from "lucide-react";
 
 function SettingsManager() {
     const [settings, setSettings] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+
+    // Verifies the saved credentials against the SMTP server without sending a
+    // message, so a bad password is caught here rather than on a real campaign.
+    const testConnection = async () => {
+        setIsTesting(true);
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: '{ testSmtpConnection }' })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+            Swal.fire({
+                icon: 'success',
+                title: 'Connexion SMTP OK',
+                text: data.data.testSmtpConnection,
+                confirmButtonColor: '#000'
+            });
+        } catch (err: any) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Échec de la connexion SMTP',
+                text: err?.message || 'Impossible de se connecter au serveur SMTP.',
+                confirmButtonColor: '#000',
+                width: 640
+            });
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     const fetchSettings = () => {
         setLoading(true);
@@ -142,14 +176,25 @@ function SettingsManager() {
                             </div>
                             <p className="text-[10px] font-bold uppercase tracking-widest leading-relaxed">Les changements s'appliquent<br />immédiatement après sauvegarde.</p>
                         </div>
-                        <button
-                            onClick={saveSettings}
-                            disabled={isSaving}
-                            className={`h-16 px-12 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] transition-all flex items-center gap-4 ${isSaving ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-black text-white hover:scale-105 active:scale-95 shadow-2xl shadow-black/20'}`}
-                        >
-                            {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
-                            {isSaving ? 'Enregistrement...' : 'Sauvegarder la Configuration'}
-                        </button>
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={testConnection}
+                                disabled={isTesting || isSaving}
+                                title="Vérifie les identifiants sans envoyer d'e-mail"
+                                className="h-16 px-8 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] transition-all flex items-center gap-3 border border-gray-200 text-gray-600 hover:border-black hover:text-black disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {isTesting ? <RefreshCcw size={16} className="animate-spin" /> : <Send size={16} />}
+                                {isTesting ? 'Test...' : 'Tester la connexion'}
+                            </button>
+                            <button
+                                onClick={saveSettings}
+                                disabled={isSaving}
+                                className={`h-16 px-12 rounded-full text-[11px] font-bold uppercase tracking-[0.2em] transition-all flex items-center gap-4 ${isSaving ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-black text-white hover:scale-105 active:scale-95 shadow-2xl shadow-black/20'}`}
+                            >
+                                {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Save size={16} />}
+                                {isSaving ? 'Enregistrement...' : 'Sauvegarder la Configuration'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -163,7 +208,19 @@ function SettingsManager() {
                 <div className="bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-xl">
                     <Mail size={24} className="mb-6 text-black/20" />
                     <h4 className="text-lg font-bold tracking-tight mb-2">Mode Débogage</h4>
-                    <p className="text-xs text-gray-400 leading-relaxed">En cas d'échec d'envoi, vérifiez vos identifiants. Si vous utilisez Gmail, l'usage d'un "Mot de Passe d'Application" est obligatoire.</p>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                        Erreur <span className="font-mono font-bold">535 / BadCredentials</span> ? Gmail refuse le mot de passe
+                        habituel du compte : il faut activer la validation en deux étapes puis générer un{' '}
+                        <a
+                            href="https://myaccount.google.com/apppasswords"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-black font-bold underline underline-offset-2"
+                        >
+                            mot de passe d'application
+                        </a>
+                        {' '}(16 caractères) et le coller ci-dessus. Les espaces sont supprimés automatiquement.
+                    </p>
                 </div>
             </div>
         </div>
@@ -359,15 +416,31 @@ export default function AdminDashboard() {
     );
 }
 
+// Blank product form. Defined once so every "reset the form" path stays in sync
+// as fields are added.
+const emptyProduct = () => ({
+    name: "", price: "", stock: "10", image_url: "", description: "",
+    category_id: "", sub_category_id: "",
+    colors: [] as { name: string, hex: string }[],
+    images: [] as string[],
+    sizes: [] as string[],
+    has_sizes: true
+});
+
 function ProductManager() {
     const [products, setProducts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [] as { name: string, hex: string }[], images: [] as string[], sizes: [] as string[], has_sizes: true });
+    const [newProduct, setNewProduct] = useState(emptyProduct());
     const [customColor, setCustomColor] = useState({ name: "", hex: "#000000" });
     const [customSize, setCustomSize] = useState("");
+
+    // Sub-categories belonging to the currently selected category. Empty when no
+    // category is picked or when that category has none.
+    const availableSubCategories =
+        categories.find(c => String(c.id) === String(newProduct.category_id))?.sub_categories || [];
 
     const fetchData = async (isInitial = false) => {
         setLoading(true);
@@ -375,7 +448,7 @@ function ProductManager() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                query: '{ products { id name price image_url images description category_id colors { name hex } sizes has_sizes stock } categories { id name } }'
+                query: '{ products { id name price image_url images description category_id sub_category_id colors { name hex } sizes has_sizes stock } categories { id name sub_categories { id name } } }'
             })
         });
         const data = await res.json();
@@ -428,11 +501,11 @@ function ProductManager() {
             }
 
             const mutation = isEditing
-                ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
-                    updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
+                ? `mutation($id: ID!, $name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $sub_category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
+                    updateProduct(id: $id, name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, sub_category_id: $sub_category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
                 }`
-                : `mutation($name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
-                    createProduct(name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
+                : `mutation($name: String!, $price: Float!, $stock: Int, $image_url: String, $description: String, $category_id: ID, $sub_category_id: ID, $colors: [ColorInput!], $images: [String!], $sizes: [String!], $has_sizes: Boolean) {
+                    createProduct(name: $name, price: $price, stock: $stock, image_url: $image_url, description: $description, category_id: $category_id, sub_category_id: $sub_category_id, colors: $colors, images: $images, sizes: $sizes, has_sizes: $has_sizes) { id }
                 }`;
 
             const res = await fetch('/api/graphql', {
@@ -448,6 +521,7 @@ function ProductManager() {
                         image_url: newProduct.image_url,
                         description: newProduct.description,
                         category_id: newProduct.category_id || null,
+                        sub_category_id: newProduct.sub_category_id || null,
                         colors: finalColors,
                         images: newProduct.images,
                         sizes: newProduct.sizes,
@@ -461,7 +535,7 @@ function ProductManager() {
             } else {
                 setIsAdding(false);
                 setEditingId(null);
-                setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
+                setNewProduct(emptyProduct());
                 fetchData();
             }
         } catch (err) {
@@ -511,6 +585,7 @@ function ProductManager() {
             image_url: realImageUrl,
             description: p.description || "",
             category_id: p.category_id || "",
+            sub_category_id: p.sub_category_id || "",
             colors: p.colors || [],
             images: fullImages,
             sizes: p.sizes || [],
@@ -530,7 +605,7 @@ function ProductManager() {
                     <button
                         onClick={() => {
                             setEditingId(null);
-                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
+                            setNewProduct(emptyProduct());
                             setIsAdding(true);
                         }}
                         className="bg-black text-white px-8 py-3 rounded-full text-sm font-medium hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/10 flex items-center gap-2"
@@ -707,7 +782,7 @@ function ProductManager() {
                     onClick={() => {
                         setIsAdding(false);
                         setEditingId(null);
-                        setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
+                        setNewProduct(emptyProduct());
                     }}
                 >
                     <div
@@ -750,18 +825,42 @@ function ProductManager() {
                                         />
                                     </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Catégorie</label>
-                                    <select
-                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
-                                        value={newProduct.category_id}
-                                        onChange={e => setNewProduct({ ...newProduct, category_id: e.target.value })}
-                                    >
-                                        <option value="">Sélectionner une catégorie</option>
-                                        {categories.map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                    </select>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Catégorie</label>
+                                        <select
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all"
+                                            value={newProduct.category_id}
+                                            // Changing the category invalidates any sub-category chosen under the
+                                            // previous one, so the sub-category is cleared alongside it.
+                                            onChange={e => setNewProduct({ ...newProduct, category_id: e.target.value, sub_category_id: "" })}
+                                        >
+                                            <option value="">Sélectionner une catégorie</option>
+                                            {categories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Sous-catégorie</label>
+                                        <select
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 outline-none focus:border-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            value={newProduct.sub_category_id}
+                                            disabled={availableSubCategories.length === 0}
+                                            onChange={e => setNewProduct({ ...newProduct, sub_category_id: e.target.value })}
+                                        >
+                                            <option value="">
+                                                {!newProduct.category_id
+                                                    ? "Choisir une catégorie d'abord"
+                                                    : availableSubCategories.length === 0
+                                                        ? "Aucune sous-catégorie"
+                                                        : "Aucune (optionnel)"}
+                                            </option>
+                                            {availableSubCategories.map((sub: any) => (
+                                                <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="space-y-4">
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Palette de Couleurs Personnalisée</label>
@@ -965,7 +1064,7 @@ function ProductManager() {
                                         onClick={() => {
                                             setIsAdding(false);
                                             setEditingId(null);
-                                            setNewProduct({ name: "", price: "", stock: "10", image_url: "", description: "", category_id: "", colors: [], images: [], sizes: [], has_sizes: true });
+                                            setNewProduct(emptyProduct());
                                         }}
                                         className="flex-1 h-14 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-gray-50 transition-all active:scale-95 text-gray-400"
                                     >
@@ -1050,6 +1149,35 @@ function CMSManager() {
                     return fetchCMS();
                 }
 
+                // Editable headings that aren't part of a generated slot group.
+                // Checked per-key, because a site that already has rows in the
+                // section would otherwise never get these created.
+                const staticText = [
+                    { key: 'featured_title', value: 'DESIGN YOUR OWN', section: 'featured' },
+                    { key: 'instagram_heading', value: 'JOIN OUR JOURNEY', section: 'instagram' },
+                    {
+                        key: 'instagram_subtext',
+                        value: 'Keep up to date with everything With Lyberty - from our journey to the way each collection comes to life',
+                        section: 'instagram'
+                    }
+                ];
+                const missingText = staticText.filter(t => !results.some((i: any) => i.key === t.key));
+                if (missingText.length > 0) {
+                    for (const t of missingText) {
+                        await fetch('/api/graphql', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                query: `mutation($key: String!, $value: String!, $type: String!, $section: String) {
+                                    updateHomeContent(key: $key, value: $value, type: $type, section: $section) { key }
+                                }`,
+                                variables: { key: t.key, value: t.value, type: 'TEXT', section: t.section }
+                            })
+                        });
+                    }
+                    return fetchCMS();
+                }
+
                 setContent(results);
                 const initial: any = {};
                 results.forEach((item: any) => {
@@ -1096,6 +1224,23 @@ function CMSManager() {
                     if (!isRealImage) continue; // untouched — skip
                 }
 
+                // Same hazard for JSON slots (instagram_post_N): their image_url
+                // arrives as a proxy URL, so editing only the caption/link would
+                // otherwise write that URL over the stored image. Strip the
+                // proxy value so the server's COALESCE keeps the existing image.
+                let valueToSave = item.value;
+                if (item.type === 'JSON' && typeof valueToSave === 'string' && valueToSave.includes('/api/image/')) {
+                    try {
+                        const obj = JSON.parse(valueToSave);
+                        if (typeof obj?.image_url === 'string' && obj.image_url.startsWith('/api/image/')) {
+                            delete obj.image_url;
+                            valueToSave = JSON.stringify(obj);
+                        }
+                    } catch {
+                        // not JSON after all — save as-is
+                    }
+                }
+
                 const res = await fetch('/api/graphql', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1105,7 +1250,7 @@ function CMSManager() {
             }`,
                         variables: {
                             key,
-                            value: item.value,
+                            value: valueToSave,
                             type: item.type,
                             section: item.section
                         }
@@ -1131,7 +1276,8 @@ function CMSManager() {
     if (loading) return <div className="p-20 text-center text-gray-300 font-light tracking-[0.3em] uppercase">Initialisation de l'éditeur...</div>;
 
     const sections = Array.from(new Set(content.map(i => i.section))).sort((a, b) => {
-        const order = ['branding', 'hero', 'categories', 'newsletter', 'instagram'];
+        // Mirrors the order these sections appear on the homepage.
+        const order = ['branding', 'hero', 'categories', 'featured', 'newsletter', 'instagram'];
         const idxA = order.indexOf(a || '');
         const idxB = order.indexOf(b || '');
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -1140,25 +1286,29 @@ function CMSManager() {
         return (a || '').localeCompare(b || '');
     });
 
+    // Mobile renders a single natural-height column: the fixed 100vh grid
+    // squeezed both panels into an unusable sliver. Desktop keeps the split view.
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 h-[calc(100vh-240px)]">
-            <div className="lg:col-span-6 flex flex-col bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
-                <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 lg:h-[calc(100vh-240px)]">
+            <div className="lg:col-span-6 flex flex-col bg-white rounded-3xl lg:rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                <div className="p-5 sm:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white/50 backdrop-blur-md sticky top-0 z-10">
                     <div>
-                        <h3 className="text-xl font-light tracking-tight">Configuration Visuelle</h3>
+                        <h3 className="text-lg sm:text-xl font-light tracking-tight">Configuration Visuelle</h3>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Live Content Management</p>
                     </div>
                     <button
                         onClick={handlePublish}
                         disabled={isSaving}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all ${isSaving ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10'}`}
+                        className={`flex items-center justify-center gap-2 px-8 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all w-full sm:w-auto flex-shrink-0 ${isSaving ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10'}`}
                     >
                         {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />}
                         {isSaving ? 'En cours...' : 'Publier'}
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12">
+                {/* Scrolls internally only on desktop, where the panel has a
+                    fixed height; on mobile the page itself scrolls. */}
+                <div className="flex-1 lg:overflow-y-auto p-5 sm:p-8 custom-scrollbar space-y-10 lg:space-y-12">
                     {sections.map(section => (
                         <div key={section} className="space-y-6">
                             <h4 className="text-[10px] font-black tracking-[0.4em] text-black/20 uppercase pb-4 border-b border-gray-50">{section || 'Général'}</h4>
@@ -1233,11 +1383,12 @@ function CMSManager() {
                                                         }
                                                     }
                                                     return (
-                                                        <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-[7rem_1fr] sm:grid-cols-2 gap-4 items-start">
                                                             <div className="space-y-3">
                                                                 <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 border-2 border-dashed border-gray-100 flex items-center justify-center group/img">
                                                                     <img src={jsonVal.image_url} className="absolute inset-0 w-full h-full object-cover" />
-                                                                    <div className="relative z-10 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                                    {/* Always tappable on touch; hover-revealed on desktop. */}
+                                                                    <div className="relative z-10 opacity-100 lg:opacity-0 lg:group-hover/img:opacity-100 transition-opacity">
                                                                         <input
                                                                             type="file"
                                                                             accept="image/*"
@@ -1315,7 +1466,9 @@ function CMSManager() {
                 </div>
             </div>
 
-            <div className="lg:col-span-6 flex flex-col gap-6">
+            {/* Preview: desktop only. An iframe of the full site is unusable at
+                phone width, so mobile gets the "open the site" card instead. */}
+            <div className="hidden lg:flex lg:col-span-6 flex-col gap-6">
                 <div className="flex-1 bg-[#121212] rounded-[3.5rem] p-6 relative shadow-2xl overflow-hidden group">
                     <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-2xl px-8 py-3 rounded-full border border-white/10 shadow-3xl z-20 flex items-center gap-6">
                         <Monitor size={16} className="text-white/40" />
@@ -1345,21 +1498,36 @@ function CMSManager() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-3xl p-8 border border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <div className="p-4 bg-blue-50 rounded-2xl">
-                            <RefreshCcw size={20} className="text-blue-500" />
-                        </div>
-                        <div>
-                            <h5 className="text-sm font-bold tracking-tight">Mise à jour en temps réel</h5>
-                            <p className="text-xs text-gray-400 mt-1">Les changements publiés sont visibles instantanément sur le site.</p>
-                        </div>
-                    </div>
-                    <Link href="/" target="_blank" className="px-6 py-3 border border-gray-100 rounded-full text-[10px] font-bold tracking-widest uppercase hover:bg-black hover:text-white transition-all group items-center flex gap-2">
-                        Ouvrir le Site <Plus size={12} className="group-hover:rotate-45 transition-transform" />
-                    </Link>
+                <RealtimeNotice />
+            </div>
+
+            {/* Same notice for mobile, where the preview column is hidden. */}
+            <div className="lg:hidden">
+                <RealtimeNotice />
+            </div>
+        </div>
+    );
+}
+
+function RealtimeNotice() {
+    return (
+        <div className="bg-white rounded-3xl p-5 sm:p-8 border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+            <div className="flex items-center gap-4 sm:gap-6">
+                <div className="p-3 sm:p-4 bg-blue-50 rounded-2xl flex-shrink-0">
+                    <RefreshCcw size={20} className="text-blue-500" />
+                </div>
+                <div className="min-w-0">
+                    <h5 className="text-sm font-bold tracking-tight">Mise à jour en temps réel</h5>
+                    <p className="text-xs text-gray-400 mt-1">Les changements publiés sont visibles instantanément sur le site.</p>
                 </div>
             </div>
+            <Link
+                href="/"
+                target="_blank"
+                className="px-6 py-3 border border-gray-100 rounded-full text-[10px] font-bold tracking-widest uppercase hover:bg-black hover:text-white transition-all group flex items-center justify-center gap-2 flex-shrink-0"
+            >
+                Ouvrir le Site <Plus size={12} className="group-hover:rotate-45 transition-transform" />
+            </Link>
         </div>
     );
 }
@@ -1521,6 +1689,9 @@ function NewsletterManager() {
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [campaignStatus, setCampaignStatus] = useState("idle");
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    // Back-in-stock requests ("Notify me when available").
+    const [stockNotifs, setStockNotifs] = useState<any[]>([]);
+    const [sendingNotifId, setSendingNotifId] = useState<string | null>(null);
 
     const fetchEmails = () => {
         setLoading(true);
@@ -1536,7 +1707,74 @@ function NewsletterManager() {
             });
     };
 
-    useEffect(() => { fetchEmails(); }, []);
+    const fetchStockNotifs = () => {
+        fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '{ stockNotifications { id email product_id product_name product_stock created_at notified_at } }' })
+        })
+            .then(res => res.json())
+            .then(data => setStockNotifs(data.data?.stockNotifications || []))
+            .catch(() => { });
+    };
+
+    useEffect(() => { fetchEmails(); fetchStockNotifs(); }, []);
+
+    const handleSendStockNotif = async (notif: any) => {
+        const confirm = await Swal.fire({
+            icon: 'question',
+            title: 'Envoyer la notification ?',
+            html: `Un e-mail sera envoyé à <b>${notif.email}</b> pour l'informer que <b>${notif.product_name}</b> est de nouveau disponible.`,
+            showCancelButton: true,
+            confirmButtonText: 'Envoyer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#000'
+        });
+        if (!confirm.isConfirmed) return;
+
+        setSendingNotifId(notif.id);
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($id: ID!) { sendStockNotification(id: $id) }`,
+                    variables: { id: notif.id }
+                })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+            Swal.fire({ icon: 'success', title: 'Envoyé', text: `Notification envoyée à ${notif.email}.`, confirmButtonColor: '#000' });
+            fetchStockNotifs();
+        } catch (err: any) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err?.message || "L'envoi a échoué.", confirmButtonColor: '#000' });
+        } finally {
+            setSendingNotifId(null);
+        }
+    };
+
+    const handleDeleteStockNotif = async (notif: any) => {
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Supprimer cette demande ?',
+            text: notif.email,
+            showCancelButton: true,
+            confirmButtonText: 'Supprimer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#dc2626'
+        });
+        if (!confirm.isConfirmed) return;
+
+        await fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: `mutation($id: ID!) { deleteStockNotification(id: $id) }`,
+                variables: { id: notif.id }
+            })
+        });
+        fetchStockNotifs();
+    };
 
     const handleSendMails = async () => {
         if (!campaignFrom) {
@@ -1717,6 +1955,91 @@ function NewsletterManager() {
                 </div>
             </div>
 
+            {/* Back-in-stock requests: shoppers who tapped "Notify me when available". */}
+            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white/50 backdrop-blur-md">
+                    <div>
+                        <h3 className="text-xl font-light tracking-tight">Alertes de Réapprovisionnement</h3>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                            {stockNotifs.filter(n => !n.notified_at).length} en attente · {stockNotifs.length} au total
+                        </p>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-gray-50/50">
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Email</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Produit</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Stock</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20">Demandé le</th>
+                                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-[0.3em] text-black/20 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {stockNotifs.map((n) => {
+                                const pending = !n.notified_at;
+                                const inStock = (n.product_stock ?? 0) > 0;
+                                return (
+                                    <tr key={n.id} className="hover:bg-gray-50/30 transition-colors">
+                                        <td className="px-8 py-6">
+                                            <span className="text-sm font-medium text-gray-600">{n.email}</span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="text-sm font-medium text-gray-800">{n.product_name || `#${n.product_id}`}</span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${inStock ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                                                {inStock ? `${n.product_stock} en stock` : 'Rupture'}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="text-[11px] font-medium text-gray-400 uppercase tracking-tight">
+                                                {n.created_at ? new Date(n.created_at).toLocaleDateString('fr-FR', {
+                                                    day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                }) : '—'}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center justify-end gap-3">
+                                                {pending ? (
+                                                    <button
+                                                        onClick={() => handleSendStockNotif(n)}
+                                                        disabled={!inStock || sendingNotifId === n.id}
+                                                        title={inStock ? "Envoyer l'e-mail de disponibilité" : "Le produit est en rupture de stock"}
+                                                        className="px-5 py-2.5 bg-black text-white rounded-full text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                                                    >
+                                                        <Send size={12} />
+                                                        {sendingNotifId === n.id ? 'Envoi...' : 'Notifier'}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-gray-50 text-gray-400">
+                                                        Envoyée
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={() => handleDeleteStockNotif(n)}
+                                                    className="text-gray-300 hover:text-red-500 transition-colors"
+                                                    title="Supprimer la demande"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {stockNotifs.length === 0 && (
+                        <div className="p-20 text-center text-gray-300 font-light italic">
+                            Aucune demande de notification pour le moment.
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-in fade-in duration-300">
                     <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
@@ -1835,10 +2158,15 @@ function CategoryManager() {
     const [editingSubId, setEditingSubId] = useState<string | null>(null);
     const [draftName, setDraftName] = useState("");
     const [isRenaming, setIsRenaming] = useState(false);
+    // Id of the row currently being moved, so its arrows can be disabled while
+    // the swap round-trips instead of queueing conflicting moves.
+    const [movingId, setMovingId] = useState<string | null>(null);
 
-    const fetchCategories = () => {
-        setLoading(true);
-        fetch('/api/graphql', {
+    // `showSpinner` is off for reorders: swapping two rows should not blank the
+    // whole panel, it should just re-render in the new order.
+    const fetchCategories = (showSpinner = true) => {
+        if (showSpinner) setLoading(true);
+        return fetch('/api/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: '{ categories { id name image_url sub_categories { id name image_url } } }' })
@@ -1942,6 +2270,38 @@ function CategoryManager() {
             });
         } finally {
             setIsRenaming(false);
+        }
+    };
+
+    // Moves a category (with its sub-categories, which stay nested under it) or a
+    // single sub-category one slot up or down. This order is what the storefront
+    // menu shows to clients.
+    const handleMove = async (kind: 'category' | 'sub', id: string, direction: 'up' | 'down') => {
+        setMovingId(id);
+        try {
+            const mutation = kind === 'category'
+                ? `mutation($id: ID!, $direction: String!) { moveCategory(id: $id, direction: $direction) }`
+                : `mutation($id: ID!, $direction: String!) { moveSubCategory(id: $id, direction: $direction) }`;
+
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: mutation, variables: { id, direction } })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+
+            await fetchCategories(false);
+        } catch (error) {
+            console.error(error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: "Le déplacement a échoué. Veuillez réessayer.",
+                confirmButtonColor: '#000'
+            });
+        } finally {
+            setMovingId(null);
         }
     };
 
@@ -2055,15 +2415,37 @@ function CategoryManager() {
                     <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-white/50 backdrop-blur-md">
                         <div>
                             <h3 className="text-xl font-light tracking-tight">Liste des Catégories</h3>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{categories.length} segments actifs</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{categories.length} segments actifs — ordre affiché aux clients</p>
                         </div>
                     </div>
 
                     <div className="divide-y divide-gray-50">
-                        {categories.map((cat) => (
+                        {categories.map((cat, index) => (
                             <div key={cat.id} className="flex flex-col p-8 hover:bg-gray-50/50 transition-colors group border-b border-gray-50 last:border-0">
                                 <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-6">
+                                        {/* Position controls: the order clients see in the storefront menu. */}
+                                        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                            <button
+                                                onClick={() => handleMove('category', cat.id, 'up')}
+                                                disabled={index === 0 || movingId !== null}
+                                                aria-label={`Monter ${cat.name}`}
+                                                title="Monter"
+                                                className="p-1.5 text-gray-300 hover:text-black hover:bg-gray-100 rounded-lg transition-all disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-gray-300"
+                                            >
+                                                <ChevronUp size={16} />
+                                            </button>
+                                            <span className="text-[10px] font-black text-gray-400 tabular-nums">{index + 1}</span>
+                                            <button
+                                                onClick={() => handleMove('category', cat.id, 'down')}
+                                                disabled={index === categories.length - 1 || movingId !== null}
+                                                aria-label={`Descendre ${cat.name}`}
+                                                title="Descendre"
+                                                className="p-1.5 text-gray-300 hover:text-black hover:bg-gray-100 rounded-lg transition-all disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-gray-300"
+                                            >
+                                                <ChevronDown size={16} />
+                                            </button>
+                                        </div>
                                         <label className="w-16 h-20 bg-gray-50 rounded-2xl flex items-center justify-center text-black/20 group-hover:text-black transition-all relative overflow-hidden cursor-pointer border border-transparent hover:border-gray-200">
                                             {cat.image_url ? (
                                                 <img src={cat.image_url} className="w-full h-full object-cover" />
@@ -2139,7 +2521,7 @@ function CategoryManager() {
                                 {/* Subcategories */}
                                 <div className="ml-20 space-y-4">
                                     <div className="flex flex-wrap gap-3">
-                                        {(cat.sub_categories || []).map((sub: any) => (
+                                        {(cat.sub_categories || []).map((sub: any, subIndex: number) => (
                                             <div key={sub.id} className="bg-gray-50 rounded-full px-5 py-2 flex items-center gap-3 border border-gray-100 group/sub">
                                                 {editingSubId === sub.id ? (
                                                     <>
@@ -2175,11 +2557,29 @@ function CategoryManager() {
                                                 ) : (
                                                     <>
                                                         <button
+                                                            onClick={() => handleMove('sub', sub.id, 'up')}
+                                                            disabled={subIndex === 0 || movingId !== null}
+                                                            aria-label={`Déplacer ${sub.name} vers la gauche`}
+                                                            title="Déplacer vers la gauche"
+                                                            className="text-gray-300 hover:text-black transition-colors disabled:opacity-20 disabled:hover:text-gray-300"
+                                                        >
+                                                            <ChevronLeft size={12} />
+                                                        </button>
+                                                        <button
                                                             onClick={() => startEditSub(sub)}
                                                             title="Cliquer pour renommer"
                                                             className="text-xs font-bold text-gray-600 uppercase tracking-widest hover:text-black transition-colors"
                                                         >
                                                             {sub.name}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleMove('sub', sub.id, 'down')}
+                                                            disabled={subIndex === (cat.sub_categories || []).length - 1 || movingId !== null}
+                                                            aria-label={`Déplacer ${sub.name} vers la droite`}
+                                                            title="Déplacer vers la droite"
+                                                            className="text-gray-300 hover:text-black transition-colors disabled:opacity-20 disabled:hover:text-gray-300"
+                                                        >
+                                                            <ChevronRight size={12} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDeleteSub(sub.id)}

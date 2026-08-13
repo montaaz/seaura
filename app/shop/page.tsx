@@ -12,6 +12,7 @@ import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
 import LoadingScreen from "@/components/LoadingScreen";
 import { productMatchesColor } from "@/lib/colorMatch";
+import { useFirstOrderDiscount } from "@/lib/useFirstOrderDiscount";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -65,9 +66,26 @@ function ShopListing() {
     const searchParams = useSearchParams();
     const categoryQuery = searchParams.get('category');
     const termQuery = searchParams.get('q');
+    // Set from the ?sub_category= link in the storefront menu. Narrows the
+    // listing to one sub-category until the shopper picks another filter.
+    const subCategoryQuery = searchParams.get('sub_category');
+    const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
+
+    // Cart totals with the first-order discount previewed against the email the
+    // shopper already gave us. Shows nothing until an email is known.
+    const cartSubtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
+    const { percent: discountPercent, discountFor } = useFirstOrderDiscount(userEmail);
+    const cartDiscount = discountFor(cartSubtotal);
+
+    const activeSubCategoryName = activeSubFilter
+        ? categories
+            .flatMap((c: any) => c.sub_categories || [])
+            .find((s: any) => String(s.id) === String(activeSubFilter))?.name
+        : null;
 
     const filteredProducts = products.filter(p => {
         const matchesCategory = searchQuery ? true : (activeFilter === "ALL" || String(p.category_id) === String(activeFilter));
+        const matchesSubCategory = searchQuery || !activeSubFilter || String(p.sub_category_id) === String(activeSubFilter);
         const matchesSearch = !searchQuery ||
             p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -75,7 +93,7 @@ function ShopListing() {
         // name + hex proximity rather than exact string equality.
         const matchesColor = productMatchesColor(p.colors, selectedSwatch);
 
-        return matchesCategory && matchesSearch && matchesColor;
+        return matchesCategory && matchesSubCategory && matchesSearch && matchesColor;
     });
 
     useEffect(() => {
@@ -86,7 +104,7 @@ function ShopListing() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: '{ products(limit: 100) { id name price image_url images category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
+                        query: '{ products(limit: 100) { id name price image_url images category_id sub_category_id colors { name hex } sizes description stock } categories { id name image_url sub_categories { id name } } homeContent { key value } }'
                     })
                 });
                 const data = await res.json();
@@ -117,6 +135,23 @@ function ShopListing() {
         if (savedWishlist) { try { setWishlist(JSON.parse(savedWishlist)); } catch (e) { } }
     }, []);
 
+    // Reconcile the restored cart against real stock. Carts persist in
+    // localStorage, so a line saved before stock dropped (or before the stepper
+    // enforced a ceiling) can exceed what is actually available.
+    useEffect(() => {
+        if (!isCartLoaded || products.length === 0) return;
+        setCart(prev => {
+            let changed = false;
+            const clamped = prev.flatMap((item: any) => {
+                const max = stockFor(item);
+                if (max <= 0) { changed = true; return []; }
+                if ((item.quantity || 1) > max) { changed = true; return [{ ...item, quantity: max }]; }
+                return [item];
+            });
+            return changed ? clamped : prev;
+        });
+    }, [isCartLoaded, products]);
+
     useEffect(() => {
         if (!isCartLoaded || !sessionId) return;
         localStorage.setItem('seaura_cart', JSON.stringify(cart));
@@ -135,8 +170,11 @@ function ShopListing() {
             const found = categories.find(c => c.id === categoryQuery || c.name.toLowerCase() === categoryQuery.toLowerCase());
             if (found) setActiveFilter(found.id);
         }
+        // Follows the URL: absent means "show the whole category" rather than
+        // leaving a stale sub-filter applied from a previous link.
+        setActiveSubFilter(subCategoryQuery);
         if (termQuery) setSearchQuery(termQuery);
-    }, [categoryQuery, termQuery, categories]);
+    }, [categoryQuery, subCategoryQuery, termQuery, categories]);
 
     const addToCart = (product: any) => {
         if (!userEmail) setIsEmailModalOpen(true);
@@ -155,6 +193,28 @@ function ShopListing() {
 
     const removeFromCart = (index: number) => {
         setCart(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // True stock for a cart line. The `stock` copied onto the item when it was
+    // added goes stale — it is a snapshot that localStorage keeps across
+    // sessions — so prefer the freshly fetched product list.
+    const stockFor = (item: any) => {
+        const live = products.find((p: any) => String(p.id) === String(item.id));
+        const value = live ? live.stock : item.stock;
+        return typeof value === 'number' ? value : Infinity;
+    };
+
+    // Adjusts one cart line by `delta`. Dropping to zero removes the line, so
+    // "−" on a single unit behaves the same as deleting it. Increases are
+    // capped at available stock.
+    const changeCartQuantity = (index: number, delta: number) => {
+        setCart(prev => prev.flatMap((item, i) => {
+            if (i !== index) return [item];
+            const next = (item.quantity || 1) + delta;
+            if (next < 1) return [];
+            const max = stockFor(item);
+            return [{ ...item, quantity: Math.min(next, max) }];
+        }));
     };
 
     const handleCheckout = () => {
@@ -201,6 +261,7 @@ function ShopListing() {
             <div className={styles.shopTopControls} style={{ marginTop: '40px' }}>
                 <h2 className={styles.sectionTitle}>
                     {activeFilter === 'ALL' ? 'Tout Voir' : categories.find(c => c.id === activeFilter)?.name}
+                    {activeSubFilter && activeSubCategoryName ? ` — ${activeSubCategoryName}` : ''}
                 </h2>
 
                 <div className={styles.categoryNav}>
@@ -208,7 +269,7 @@ function ShopListing() {
                         <span
                             key={cat.id}
                             className={`${styles.catNavItem} ${activeFilter === cat.id ? styles.catNavItemActive : ""}`}
-                            onClick={() => setActiveFilter(cat.id)}
+                            onClick={() => { setActiveFilter(cat.id); setActiveSubFilter(null); }}
                         >
                             {cat.id === "ALL" ? "Tout Voir" : cat.name}
                         </span>
@@ -342,7 +403,35 @@ function ShopListing() {
                             <div className={styles.cartItemThumb} style={{ position: 'relative' }}>
                                 <Image src={(item.images && item.images.length > 0) ? item.images[0] : (item.image_url || "/images/clothing.png")} alt={item.name} fill sizes="80px" className="object-cover" />
                             </div>
-                            <div className={styles.cartItemInfo}><h4>{item.name}</h4><p>{item.selectedColor} — {item.selectedSize}</p><div className={styles.cartItemPrice}>{item.price} TND</div></div>
+                            <div className={styles.cartItemInfo}>
+                                <h4>{item.name}</h4>
+                                <p>{item.selectedColor} — {item.selectedSize}</p>
+                                <div className={styles.qtyStepper}>
+                                    <button
+                                        type="button"
+                                        onClick={() => changeCartQuantity(idx, -1)}
+                                        aria-label={`Retirer un ${item.name}`}
+                                        title="Retirer un article"
+                                    >−</button>
+                                    <span aria-live="polite">{item.quantity || 1}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => changeCartQuantity(idx, 1)}
+                                        disabled={(item.quantity || 1) >= stockFor(item)}
+                                        aria-label={`Ajouter un ${item.name}`}
+                                        title={(item.quantity || 1) >= stockFor(item) ? "Stock maximum atteint" : "Ajouter un article"}
+                                    >+</button>
+                                    {(item.quantity || 1) >= stockFor(item) && (
+                                        <span className={styles.stockNote}>Stock max: {stockFor(item)}</span>
+                                    )}
+                                </div>
+                                <div className={styles.cartItemPrice}>
+                                    {(parseFloat(item.price) * (item.quantity || 1)).toFixed(2)} TND
+                                    {(item.quantity || 1) > 1 && (
+                                        <span className={styles.cartUnitPrice}> ({parseFloat(item.price).toFixed(2)} × {item.quantity})</span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -350,8 +439,20 @@ function ShopListing() {
                     <div className={styles.cartFooter}>
                         <div className={styles.cartTotal}>
                             <span>Subtotal</span>
-                            <span>{cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0).toFixed(2)} TND</span>
+                            <span>{cartSubtotal.toFixed(2)} TND</span>
                         </div>
+                        {cartDiscount > 0 && (
+                            <>
+                                <div className={styles.cartTotal} style={{ color: '#1a7f5a' }}>
+                                    <span>First order −{discountPercent}%</span>
+                                    <span>−{cartDiscount.toFixed(2)} TND</span>
+                                </div>
+                                <div className={styles.cartTotal}>
+                                    <span>Total</span>
+                                    <span>{(cartSubtotal - cartDiscount).toFixed(2)} TND</span>
+                                </div>
+                            </>
+                        )}
                         <button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button>
                     </div>
                 )}

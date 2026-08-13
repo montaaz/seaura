@@ -9,9 +9,14 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Swal from "sweetalert2";
 import { useRouter } from "next/navigation";
+import { useFirstOrderDiscount } from "@/lib/useFirstOrderDiscount";
+import { useUser } from "@/components/Providers";
 
 export default function CheckoutPage() {
     const router = useRouter();
+    // The email captured earlier in the visit, so the discount is already
+    // reflected here instead of appearing only after the field is retyped.
+    const { userEmail } = useUser();
     const [cart, setCart] = useState<any[]>([]);
     const [wishlist, setWishlist] = useState<any[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -58,9 +63,25 @@ export default function CheckoutPage() {
         setIsLoaded(true);
     }, []);
 
+    // Prefill the email once the provider has read it from storage, but never
+    // overwrite what the customer has already typed here.
+    useEffect(() => {
+        if (!userEmail) return;
+        setFormData(prev => (prev.email ? prev : { ...prev, email: userEmail }));
+    }, [userEmail]);
+
     const subtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
     const shipping = 8.0;
-    const total = subtotal + shipping;
+    // Preview only. The server re-checks eligibility and recomputes the total
+    // when the order is placed, so this can never grant a discount on its own.
+    const {
+        eligible: discountEligible,
+        percent: discountPercent,
+        checking: checkingDiscount,
+        discountFor
+    } = useFirstOrderDiscount(formData.email || userEmail);
+    const discountAmount = discountFor(subtotal);
+    const total = subtotal - discountAmount + shipping;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target as any;
@@ -89,10 +110,12 @@ export default function CheckoutPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: `mutation($total: Float!, $items: [OrderItemInput!]!, $email: String, $phone: String, $address: String, $city: String) {
-                        createOrder(total: $total, items: $items, email: $email, phone: $phone, address: $address, city: $city) { id }
+                        createOrder(total: $total, items: $items, email: $email, phone: $phone, address: $address, city: $city) { id total discount_amount discount_percent }
                     }`,
                     variables: {
-                        total,
+                        // Merchandise only: the server's total excludes shipping,
+                        // and it compares this value against its own computation.
+                        total: Number((subtotal - discountAmount).toFixed(2)),
                         items,
                         email: formData.email,
                         phone: formData.phone,
@@ -129,20 +152,34 @@ export default function CheckoutPage() {
                     }
                 });
 
+                // Trust the server's numbers for the receipt: it is the authority
+                // on whether the discount actually applied.
+                const granted = Number(data.data.createOrder.discount_amount || 0);
                 setOrderSummary({
                     id: data.data.createOrder.id,
                     date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-                    total,
+                    subtotal,
+                    discount: granted,
+                    discountPercent: data.data.createOrder.discount_percent || 0,
+                    shipping,
+                    total: Number(data.data.createOrder.total || 0) + shipping,
                     items,
                     billing: { ...formData }
                 });
                 localStorage.removeItem('seaura_cart');
                 setCart([]);
             } else {
-                throw new Error("Failed to create order");
+                // Surface the server's message (e.g. insufficient stock) rather
+                // than a generic failure the customer cannot act on.
+                throw new Error(data.errors?.[0]?.message || "Failed to create order");
             }
-        } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Erreur', text: 'Une erreur est survenue lors de la validation.', confirmButtonColor: '#000' });
+        } catch (err: any) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: err?.message || 'Une erreur est survenue lors de la validation.',
+                confirmButtonColor: '#000'
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -236,11 +273,17 @@ export default function CheckoutPage() {
                                     ))}
                                     <tr>
                                         <td>Sous-total :</td>
-                                        <td>{(orderSummary.total - 8).toFixed(2)} TND</td>
+                                        <td>{orderSummary.subtotal.toFixed(2)} TND</td>
                                     </tr>
+                                    {orderSummary.discount > 0 && (
+                                        <tr style={{ color: '#1a7f5a' }}>
+                                            <td>Remise première commande ({orderSummary.discountPercent}%) :</td>
+                                            <td>−{orderSummary.discount.toFixed(2)} TND</td>
+                                        </tr>
+                                    )}
                                     <tr>
                                         <td>Expédition :</td>
-                                        <td>8,00 TND via Forfait</td>
+                                        <td>{orderSummary.shipping.toFixed(2)} TND via Forfait</td>
                                     </tr>
                                     <tr>
                                         <td>Total :</td>
@@ -361,6 +404,18 @@ export default function CheckoutPage() {
                                         <span>Sous-total</span>
                                         <span>{subtotal.toFixed(2)} TND</span>
                                     </div>
+                                    {checkingDiscount && !discountEligible && (
+                                        <div className={styles.totalRow}>
+                                            <span style={{ opacity: 0.5 }}>Vérification de la remise…</span>
+                                            <span />
+                                        </div>
+                                    )}
+                                    {discountEligible && (
+                                        <div className={styles.totalRow} style={{ color: '#1a7f5a' }}>
+                                            <span>Remise première commande ({discountPercent}%)</span>
+                                            <span>−{discountAmount.toFixed(2)} TND</span>
+                                        </div>
+                                    )}
                                     <div className={styles.totalRow}>
                                         <span>Expédition</span>
                                         <span>Forfait: {shipping.toFixed(2)} TND</span>

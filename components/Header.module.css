@@ -415,7 +415,7 @@
   font-weight: 600 !important;
   color: #888 !important;
   letter-spacing: 0.15em !important;
-  text-transform: uppercase;
+  /* No text-transform: sub-category names display exactly as the admin typed them. */
 }
 
 .subMenu li a:hover {

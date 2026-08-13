@@ -10,6 +10,7 @@ import { MessageCircle, Send, X as CloseIcon, User as UserIcon, ArrowUp, Instagr
 import dynamic from "next/dynamic";
 import Swal from "sweetalert2";
 import { useUser } from "@/components/Providers";
+import { useFirstOrderDiscount } from "@/lib/useFirstOrderDiscount";
 import LoadingScreen from "@/components/LoadingScreen";
 import Header from "@/components/Header";
 
@@ -47,6 +48,7 @@ function ShopDetail() {
 
     // The product for THIS page
     const [product, setProduct] = useState<any>(null);
+    const [isSubscribing, setIsSubscribing] = useState(false);
 
     const filteredProducts = products.filter(p => {
         const matchesCategory = searchQuery ? true : (activeFilter === "ALL" || String(p.category_id) === String(activeFilter));
@@ -120,6 +122,23 @@ function ShopDetail() {
         }
     }, [product]);
 
+    // Reconcile the restored cart against real stock. Carts persist in
+    // localStorage, so a line saved before stock dropped (or before the stepper
+    // enforced a ceiling) can exceed what is actually available.
+    useEffect(() => {
+        if (!isCartLoaded || products.length === 0) return;
+        setCart(prev => {
+            let changed = false;
+            const clamped = prev.flatMap((item: any) => {
+                const max = stockFor(item);
+                if (max <= 0) { changed = true; return []; }
+                if ((item.quantity || 1) > max) { changed = true; return [{ ...item, quantity: max }]; }
+                return [item];
+            });
+            return changed ? clamped : prev;
+        });
+    }, [isCartLoaded, products]);
+
     useEffect(() => {
         if (!isCartLoaded || !sessionId) return;
         localStorage.setItem('seaura_cart', JSON.stringify(cart));
@@ -163,24 +182,32 @@ function ShopDetail() {
     const addToCart = (product: any, quantity: number = 1) => {
         if (!userEmail) setIsEmailModalOpen(true);
         
-        // CHECK STOCK
-        if (product.stock < quantity) {
-            alert("Not enough stock available");
+        // Compare against what is left after the cart, not raw stock: units
+        // already in the bag are reserved and must not be handed out twice.
+        const totalStock = typeof product.stock === 'number' ? product.stock : Infinity;
+        const available = totalStock - inCartQty(product.id);
+        if (available < quantity) {
+            alert(available > 0
+                ? `Stock insuffisant: il reste ${available} article(s) disponible(s).`
+                : "Ce produit n'est plus disponible.");
             return;
         }
 
         setCart(prev => {
-            const isExist = prev.find(item => 
-                item.id === product.id && 
+            const isExist = prev.find(item =>
+                item.id === product.id &&
                 item.selectedSize === (product.has_sizes !== false ? selectedSize : "Standard") &&
                 item.selectedColor === selectedColorName
             );
 
             let updated;
             if (isExist) {
-                updated = prev.map(item => 
-                    item === isExist 
-                        ? { ...item, quantity: (item.quantity || 1) + quantity }
+                // Cap the merged line at available stock: the check above tests
+                // this add alone, so repeated adds could otherwise overshoot.
+                const max = typeof product.stock === 'number' ? product.stock : Infinity;
+                updated = prev.map(item =>
+                    item === isExist
+                        ? { ...item, quantity: Math.min((item.quantity || 1) + quantity, max) }
                         : item
                 );
             } else {
@@ -194,10 +221,9 @@ function ShopDetail() {
             return updated;
         });
 
-        // DECREMENT LOCAL STOCK
-        if (product.id === productId) {
-            setProduct((prev: any) => ({ ...prev, stock: prev.stock - quantity }));
-        }
+        // Stock is not mutated here: `remainingStock` derives what is still
+        // available from the cart, so removing an item restores it immediately
+        // instead of staying decremented until a reload.
 
         setIsCartOpen(true);
         setCount(1); // Reset counter
@@ -207,10 +233,100 @@ function ShopDetail() {
         setCart(prev => prev.filter((_, i) => i !== index));
     };
 
+    // True stock for a cart line. The `stock` copied onto the item when it was
+    // added goes stale — it is a snapshot that localStorage keeps across
+    // sessions — so prefer the freshly fetched product list.
+    const stockFor = (item: any) => {
+        const live = products.find((p: any) => String(p.id) === String(item.id));
+        const value = live ? live.stock : item.stock;
+        return typeof value === 'number' ? value : Infinity;
+    };
+
+    // Adjusts one cart line by `delta`. Dropping to zero removes the line, so
+    // "−" on a single unit behaves the same as deleting it. Increases are
+    // capped at available stock.
+    const changeCartQuantity = (index: number, delta: number) => {
+        setCart(prev => prev.flatMap((item, i) => {
+            if (i !== index) return [item];
+            const next = (item.quantity || 1) + delta;
+            if (next < 1) return [];
+            const max = stockFor(item);
+            return [{ ...item, quantity: Math.min(next, max) }];
+        }));
+    };
+
     const handleCheckout = () => {
         if (cart.length === 0) return;
         router.push('/checkout');
     };
+
+    // Registers the shopper for a back-in-stock email. Prefills the address we
+    // already know so most shoppers only have to confirm.
+    const handleNotifyMe = async () => {
+        const { value: email } = await Swal.fire({
+            title: 'Vous serez prévenu(e)',
+            text: `Recevez un e-mail dès que ${product?.name} sera de nouveau disponible.`,
+            input: 'email',
+            inputValue: userEmail || '',
+            inputPlaceholder: 'votre@email.com',
+            inputAttributes: { 'aria-label': 'Votre adresse e-mail' },
+            showCancelButton: true,
+            confirmButtonText: 'Me prévenir',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#000',
+            validationMessage: 'Veuillez saisir une adresse e-mail valide.'
+        });
+        if (!email) return;
+
+        setIsSubscribing(true);
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: `mutation($product_id: ID!, $email: String!) { notifyWhenAvailable(product_id: $product_id, email: $email) }`,
+                    variables: { product_id: String(productId), email }
+                })
+            });
+            const data = await res.json();
+            if (data.errors?.length) throw new Error(data.errors[0].message);
+
+            if (!userEmail) setUserEmail(email);
+            Swal.fire({
+                icon: 'success',
+                title: 'C\'est noté !',
+                text: 'Nous vous enverrons un e-mail dès le retour en stock.',
+                confirmButtonColor: '#000'
+            });
+        } catch (err: any) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: err?.message || 'Une erreur est survenue. Veuillez réessayer.',
+                confirmButtonColor: '#000'
+            });
+        } finally {
+            setIsSubscribing(false);
+        }
+    };
+
+    // Units of `productId` already reserved in the cart, across every size and
+    // colour line of that product.
+    const inCartQty = (id: any) => cart
+        .filter((item: any) => String(item.id) === String(id))
+        .reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+
+    // What the shopper can still add. Derived rather than stored, so adding and
+    // removing from the cart updates it immediately and symmetrically.
+    const remainingStock = product
+        ? Math.max(0, (typeof product.stock === 'number' ? product.stock : Infinity) - inCartQty(product.id))
+        : 0;
+
+    // Cart totals with the first-order discount previewed against the email the
+    // shopper already gave us. Shows nothing until an email is known.
+    const cartSubtotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0);
+    const { percent: discountPercent, discountFor } = useFirstOrderDiscount(userEmail);
+    const cartDiscount = discountFor(cartSubtotal);
 
     const [count, setCount] = useState(1);
     const [isScrolled, setIsScrolled] = useState(false);
@@ -403,12 +519,19 @@ function ShopDetail() {
                             <div className={styles.qtySelector}>
                                 <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
                                 <span className="text-sm font-light">{count}</span>
-                                <button className={styles.qtyBtn} onClick={() => setCount(Math.min(product.stock, count + 1))}>+</button>
+                                <button className={styles.qtyBtn} disabled={count >= remainingStock} onClick={() => setCount(Math.min(remainingStock, count + 1))}>+</button>
                             </div>
 
                             <div className="flex flex-col gap-4 w-full">
                                 <div className="flex gap-4 w-full">
-                                    <button className={styles.buyBtn} onClick={() => addToCart(product, count)} style={{ padding: '18px', width: '100%' }}>ADD TO CARD</button>
+                                    <button
+                                        className={styles.buyBtn}
+                                        onClick={() => addToCart(product, count)}
+                                        disabled={remainingStock <= 0}
+                                        style={{ padding: '18px', width: '100%' }}
+                                    >
+                                        {remainingStock <= 0 ? 'SOLD OUT' : 'ADD TO CARD'}
+                                    </button>
                                     <button onClick={() => toggleWishlist(product)} className="w-14 h-14 rounded-full border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-95 flex-shrink-0">
                                         <Heart size={20} className={wishlist.find(p => p.id === product.id) ? "fill-pink-500 text-pink-500" : "text-gray-300"} />
                                     </button>
@@ -447,12 +570,12 @@ function ShopDetail() {
                                 </div>
                             </div>
                             <div className={styles.actionRow}>
-                                {product.stock > 0 ? (
+                                {remainingStock > 0 ? (
                                     <>
                                         <div className={styles.qtySelector}>
                                             <button className={styles.qtyBtn} onClick={() => setCount(Math.max(1, count - 1))}>−</button>
                                             <span className="text-sm font-light">{count}</span>
-                                            <button className={styles.qtyBtn} onClick={() => setCount(Math.min(product.stock, count + 1))}>+</button>
+                                            <button className={styles.qtyBtn} disabled={count >= remainingStock} onClick={() => setCount(Math.min(remainingStock, count + 1))}>+</button>
                                         </div>
                                         <div className="flex flex-col gap-4 w-full">
                                             <div className="flex gap-4 w-full">
@@ -474,7 +597,25 @@ function ShopDetail() {
                                 ) : (
                                     <div className="w-full">
                                         <div className={styles.soldOutBox}>SOLD OUT</div>
-                                        <button className={styles.notifyBtn}>NOTIFY ME WHEN AVAILABLE</button>
+                                        {/* Offered whenever nothing more can be added — whether the
+                                            product is truly out of stock or the shopper already holds
+                                            every remaining unit and wants more on the next restock. */}
+                                        <button
+                                            className={styles.notifyBtn}
+                                            onClick={handleNotifyMe}
+                                            disabled={isSubscribing}
+                                        >
+                                            {isSubscribing ? 'ENVOI...' : 'NOTIFY ME WHEN AVAILABLE'}
+                                        </button>
+                                        {product.stock > 0 && (
+                                            <button
+                                                className={styles.notifyBtn}
+                                                style={{ marginTop: '12px', background: 'transparent', color: '#000', border: '1px solid rgba(0,0,0,0.15)' }}
+                                                onClick={() => setIsCartOpen(true)}
+                                            >
+                                                VOIR MON PANIER
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -630,15 +771,51 @@ function ShopDetail() {
                             </div>
                             <div className={styles.cartItemInfo}>
                                 <h4>{item.name}</h4>
-                                <p>{item.selectedColor} — {item.selectedSize} {item.quantity > 1 ? `(x${item.quantity})` : ""}</p>
-                                <div className={styles.cartItemPrice}>{item.price} TND</div>
+                                <p>{item.selectedColor} — {item.selectedSize}</p>
+                                <div className={styles.qtyStepper}>
+                                    <button
+                                        type="button"
+                                        onClick={() => changeCartQuantity(idx, -1)}
+                                        aria-label={`Retirer un ${item.name}`}
+                                        title="Retirer un article"
+                                    >−</button>
+                                    <span aria-live="polite">{item.quantity || 1}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => changeCartQuantity(idx, 1)}
+                                        disabled={(item.quantity || 1) >= stockFor(item)}
+                                        aria-label={`Ajouter un ${item.name}`}
+                                        title={(item.quantity || 1) >= stockFor(item) ? "Stock maximum atteint" : "Ajouter un article"}
+                                    >+</button>
+                                    {(item.quantity || 1) >= stockFor(item) && (
+                                        <span className={styles.stockNote}>Stock max: {stockFor(item)}</span>
+                                    )}
+                                </div>
+                                <div className={styles.cartItemPrice}>
+                                    {(parseFloat(item.price) * (item.quantity || 1)).toFixed(2)} TND
+                                    {(item.quantity || 1) > 1 && (
+                                        <span className={styles.cartUnitPrice}> ({parseFloat(item.price).toFixed(2)} × {item.quantity})</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
                 </div>
                 {cart.length > 0 && (
                     <div className={styles.cartFooter}>
-                        <div className={styles.cartTotal}><span>Subtotal</span><span>{cart.reduce((sum, item) => sum + (parseFloat(item.price) * (item.quantity || 1)), 0).toFixed(2)} TND</span></div>
+                        <div className={styles.cartTotal}><span>Subtotal</span><span>{cartSubtotal.toFixed(2)} TND</span></div>
+                        {cartDiscount > 0 && (
+                            <>
+                                <div className={styles.cartTotal} style={{ color: '#1a7f5a' }}>
+                                    <span>First order −{discountPercent}%</span>
+                                    <span>−{cartDiscount.toFixed(2)} TND</span>
+                                </div>
+                                <div className={styles.cartTotal}>
+                                    <span>Total</span>
+                                    <span>{(cartSubtotal - cartDiscount).toFixed(2)} TND</span>
+                                </div>
+                            </>
+                        )}
                         <button className={styles.checkoutBtn} onClick={handleCheckout}>Finalize Collection</button>
                     </div>
                 )}
