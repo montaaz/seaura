@@ -3217,7 +3217,7 @@ function AccountingManager() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: '{ orders { total payment_status customer_email created_at items { product_name quantity price size color } } charges { id description amount category date } }'
+                    query: '{ orders { id total payment_status customer_email created_at items { id product_name quantity price size color } } charges { id description amount category date } }'
                 })
             });
             const data = await res.json();
@@ -3461,7 +3461,32 @@ function AccountingManager() {
                                         {orders
                                             .filter(o => o.payment_status === 'PAID')
                                             .map(order => (
-                                                order.items?.map((item: any, idx: number) => (
+                                                // Orders placed before order_items stopped cascading on
+                                                // product deletion have no lines left. Their date, client
+                                                // and total are still real, so show the sale at order level
+                                                // rather than hiding revenue that the totals below count.
+                                                !order.items?.length ? (
+                                                    <tr key={order.id} className="group hover:bg-gray-50 transition-all rounded-2xl overflow-hidden shadow-sm shadow-black/5 bg-white border border-gray-50">
+                                                        <td className="px-6 py-6 rounded-l-2xl text-[10px] font-bold text-gray-400">
+                                                            {order.created_at && !isNaN(new Date(order.created_at).getTime())
+                                                                ? new Date(order.created_at).toLocaleDateString('fr-FR')
+                                                                : 'N/A'}
+                                                        </td>
+                                                        <td className="px-6 py-6 text-xs font-medium italic text-gray-500">
+                                                            {order.customer_email}
+                                                        </td>
+                                                        <td className="px-6 py-6">
+                                                            <p className="text-sm font-medium italic tracking-tight text-gray-400">Détail indisponible</p>
+                                                        </td>
+                                                        <td className="px-6 py-6">
+                                                            <span className="text-[8px] font-black tracking-widest bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md uppercase text-gray-300">—</span>
+                                                        </td>
+                                                        <td className="px-6 py-6 text-sm font-medium text-gray-300">—</td>
+                                                        <td className="px-6 py-6 rounded-r-2xl text-right font-black text-sm tracking-tighter text-black">
+                                                            {order.total} TND
+                                                        </td>
+                                                    </tr>
+                                                ) : order.items?.map((item: any, idx: number) => (
                                                     <tr key={`${order.id}-${idx}`} className="group hover:bg-gray-50 transition-all rounded-2xl overflow-hidden shadow-sm shadow-black/5 bg-white border border-gray-50">
                                                         <td className="px-6 py-6 rounded-l-2xl text-[10px] font-bold text-gray-400">
                                                             {order.created_at && !isNaN(new Date(order.created_at).getTime())
@@ -3511,6 +3536,13 @@ function AccountingManager() {
                                             .reduce((sum, o) => sum + (o.items?.reduce((iSum: number, i: any) => iSum + i.quantity, 0) || 0), 0)
                                         } Produits
                                     </p>
+                                    {/* The quantity of an order whose lines were lost is unknown,
+                                        so it is left out of the count rather than guessed. */}
+                                    {orders.filter(o => o.payment_status === 'PAID' && !o.items?.length).length > 0 && (
+                                        <p className="text-[7px] md:text-[8px] font-medium italic text-gray-400 mt-1">
+                                            + {orders.filter(o => o.payment_status === 'PAID' && !o.items?.length).length} commande(s) sans détail
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[7px] md:text-[8px] font-bold uppercase text-gray-400 mb-1">Chiffre d'Affaires</p>

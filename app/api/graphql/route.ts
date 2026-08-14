@@ -610,7 +610,7 @@ const resolvers = {
                      'price', oi.price,
                      'size', oi.size,
                      'color', oi.color,
-                     'product_name', p.name
+                     'product_name', COALESCE(oi.product_name, p.name, 'Produit supprimé')
                    )
                  ) FILTER (WHERE oi.id IS NOT NULL),
                  '[]'
@@ -887,9 +887,11 @@ const resolvers = {
       const order = orderRes.rows[0];
 
       for (const item of pricedItems) {
+        // product_name is snapshotted here on purpose: the product row can be
+        // deleted later, and the sale must stay readable in the sales journal.
         await query(
-          "INSERT INTO order_items (order_id, product_id, quantity, price, size, color) VALUES ($1, $2, $3, $4, $5, $6)",
-          [order.id, item.id, item.quantity, item.price, item.selectedSize, item.selectedColor]
+          "INSERT INTO order_items (order_id, product_id, quantity, price, size, color, product_name) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [order.id, item.id, item.quantity, item.price, item.selectedSize, item.selectedColor, item.name]
         );
       }
 
