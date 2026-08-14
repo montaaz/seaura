@@ -1331,8 +1331,20 @@ function CMSManager() {
                                                 {section === 'instagram' && (
                                                     <button
                                                         onClick={async () => {
-                                                            if (confirm("Supprimer cet emplacement Instagram ?")) {
-                                                                await fetch('/api/graphql', {
+                                                            const confirm = await Swal.fire({
+                                                                icon: 'warning',
+                                                                title: 'Supprimer cet emplacement Instagram ?',
+                                                                text: item.key.replace(/_/g, ' '),
+                                                                showCancelButton: true,
+                                                                confirmButtonText: 'Supprimer',
+                                                                cancelButtonText: 'Annuler',
+                                                                confirmButtonColor: '#ef4444',
+                                                                cancelButtonColor: '#000',
+                                                            });
+                                                            if (!confirm.isConfirmed) return;
+
+                                                            try {
+                                                                const res = await fetch('/api/graphql', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
                                                                     body: JSON.stringify({
@@ -1340,7 +1352,21 @@ function CMSManager() {
                                                                         variables: { key: item.key }
                                                                     })
                                                                 });
+                                                                const data = await res.json();
+                                                                if (!data.data?.deleteHomeContent) {
+                                                                    throw new Error(data.errors?.[0]?.message || 'Suppression échouée');
+                                                                }
+                                                                // Drop the staged edits too, otherwise the next publish
+                                                                // would re-insert the row we just deleted.
+                                                                setStagedChanges(prev => {
+                                                                    const next = { ...prev };
+                                                                    delete next[item.key];
+                                                                    return next;
+                                                                });
                                                                 fetchCMS();
+                                                                Swal.fire({ icon: 'success', title: 'Supprimé', text: 'Emplacement Instagram supprimé.', confirmButtonColor: '#000' });
+                                                            } catch (err: any) {
+                                                                Swal.fire({ icon: 'error', title: 'Erreur', text: err.message || 'Erreur lors de la suppression.', confirmButtonColor: '#000' });
                                                             }
                                                         }}
                                                         className="text-[8px] px-2 py-0.5 rounded-full bg-red-50 text-red-400 border border-red-100 uppercase tracking-tighter hover:bg-red-500 hover:text-white transition-all"
@@ -1551,7 +1577,6 @@ function HelpContentManager() {
         { id: "about", label: "About", keyTitle: "HELP_ABOUT_TITLE", keyBody: "HELP_ABOUT_BODY" },
         { id: "shipping", label: "Shipping", keyTitle: "HELP_SHIPPING_TITLE", keyBody: "HELP_SHIPPING_BODY" },
         { id: "materials", label: "Materials & Care", keyTitle: "HELP_MATERIALS_TITLE", keyBody: "HELP_MATERIALS_BODY" },
-        { id: "returns", label: "Returns", keyTitle: "HELP_RETURNS_TITLE", keyBody: "HELP_RETURNS_BODY" },
         { id: "contact", label: "Contact", keyTitle: "HELP_CONTACT_TITLE", keyBody: "HELP_CONTACT_BODY" },
         { id: "privacy", label: "Privacy Policy", keyTitle: "HELP_PRIVACY_TITLE", keyBody: "HELP_PRIVACY_BODY" },
     ];

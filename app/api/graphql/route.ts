@@ -380,6 +380,7 @@ const typeDefs = gql`
     updateProduct(id: ID!, name: String!, description: String, price: Float!, image_url: String, category_id: ID, sub_category_id: ID, colors: [ColorInput!], images: [String!], sizes: [String!], has_sizes: Boolean, stock: Int): Product!
     deleteProduct(id: ID!): Boolean!
     updateHomeContent(key: String!, value: String!, type: String!, section: String): HomeContent!
+    deleteHomeContent(key: String!): Boolean!
     subscribeNewsletter(email: String!): Boolean!
     deleteNewsletter(id: ID!): Boolean!
     createOrder(total: Float!, items: [OrderItemInput!]!, email: String, phone: String, address: String, city: String): Order!
@@ -771,6 +772,11 @@ const resolvers = {
         [key, value, type, section]
       );
       return res.rows[0];
+    },
+    deleteHomeContent: async (_: any, { key }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      await query("DELETE FROM home_content WHERE key = $1", [key]);
+      return true;
     },
     subscribeNewsletter: async (_: any, { email }: any) => {
       await query(

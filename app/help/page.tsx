@@ -6,13 +6,12 @@ import styles from "./help.module.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LoadingScreen from "@/components/LoadingScreen";
-import { Search, Info, Truck, Sparkles, RefreshCcw, Mail, ShieldCheck, ChevronRight } from "lucide-react";
+import { Search, Info, Truck, Sparkles, Mail, ShieldCheck, ChevronRight } from "lucide-react";
 
 const SECTIONS = [
     { id: "about", label: "About", icon: <Info size={18} /> },
     { id: "shipping", label: "Shipping", icon: <Truck size={18} /> },
     { id: "materials", label: "Materials & Care", icon: <Sparkles size={18} /> },
-    { id: "returns", label: "Returns", icon: <RefreshCcw size={18} /> },
     { id: "contact", label: "Contact", icon: <Mail size={18} /> },
     { id: "privacy", label: "Privacy Policy", icon: <ShieldCheck size={18} /> },
 ];
@@ -142,20 +141,6 @@ function HelpContent() {
                             <h4>Jewelry</h4>
                             <p>Avoid contact with water, perfumes, and chemicals. Store in the provided pouch when not in use.</p>
                         </div>
-                    </>
-                );
-            case "returns":
-                return getContent(
-                    "HELP_RETURNS_TITLE",
-                    "Returns & Exchanges",
-                    "HELP_RETURNS_BODY",
-                    <>
-                        <p className={styles.contentText}>We want you to love your purchase. If you're not completely satisfied, you can return your items within 14 days of delivery.</p>
-                        <ul className={styles.helpList}>
-                            <li>Items must be unworn and in original packaging.</li>
-                            <li>Personalized or sale items are non-refundable.</li>
-                            <li>Return shipping costs are the responsibility of the customer.</li>
-                        </ul>
                     </>
                 );
             case "contact":
