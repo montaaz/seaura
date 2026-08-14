@@ -126,6 +126,49 @@ const isFirstOrderEmail = async (email?: string | null) => {
 };
 
 /**
+ * Gives an order's quantities back to product stock. Only meaningful for an
+ * order that actually took stock, i.e. one that reached COMPLETED.
+ * Lines whose product was deleted have a null product_id and are skipped.
+ */
+const restoreStockForOrder = async (orderId: string | number) => {
+  const items = await query(
+    "SELECT product_id, quantity FROM order_items WHERE order_id = $1",
+    [orderId]
+  );
+  for (const item of items.rows) {
+    if (item.product_id) {
+      await query(
+        "UPDATE products SET stock = stock + $1 WHERE id = $2",
+        [item.quantity, item.product_id]
+      );
+    }
+  }
+};
+
+/**
+ * Re-sums an order's total from its remaining lines after an edit, so the
+ * amount shown in Commandes and counted as revenue stays consistent.
+ * Discounts already granted are preserved.
+ */
+const recalculateOrderTotal = async (orderId: string | number) => {
+  const res = await query(
+    `SELECT COALESCE(SUM(price * quantity), 0)::float AS merchandise
+     FROM order_items WHERE order_id = $1`,
+    [orderId]
+  );
+  const merchandise = Number(res.rows[0]?.merchandise || 0);
+
+  const ord = await query("SELECT discount_percent FROM orders WHERE id = $1", [orderId]);
+  const percent = Number(ord.rows[0]?.discount_percent || 0);
+  const discount = Number(((merchandise * percent) / 100).toFixed(2));
+
+  await query(
+    "UPDATE orders SET total = $1, discount_amount = $2 WHERE id = $3",
+    [Number((merchandise - discount).toFixed(2)), discount, orderId]
+  );
+};
+
+/**
  * Swaps a row's sort_order with the sibling directly above ('up') or below
  * ('down') it in the displayed order. Siblings are all categories, or — for
  * sub_categories — the rows sharing the same category_id.
@@ -397,6 +440,12 @@ const typeDefs = gql`
     createCharge(description: String!, amount: Float!, category: String, date: String): Charge!
     deleteCharge(id: ID!): Boolean!
     updateOrderPaymentStatus(id: ID!, payment_status: String!): Order!
+    "Marks an order CANCELLED: kept for the record, excluded from revenue, stock returned."
+    cancelOrder(id: ID!): Order!
+    "Restores a cancelled order to PENDING."
+    restoreOrder(id: ID!): Order!
+    updateOrderItem(id: ID!, quantity: Int, price: Float): Order!
+    deleteOrderItem(id: ID!): Order!
     createSubCategory(name: String!, category_id: ID!, image_url: String): SubCategory!
     updateSubCategory(id: ID!, name: String, image_url: String): SubCategory!
     deleteSubCategory(id: ID!): Boolean!
@@ -923,6 +972,12 @@ const resolvers = {
           }
         }
       }
+
+      // Leaving COMPLETED must give the stock back, otherwise "Remettre en
+      // attente" silently loses inventory that was never actually sold.
+      if (order && wasCompleted && status !== 'COMPLETED') {
+        await restoreStockForOrder(id);
+      }
       return order;
     },
     updateOrderPaymentStatus: async (_: any, { id, payment_status }: any, context: any) => {
@@ -931,6 +986,92 @@ const resolvers = {
         "UPDATE orders SET payment_status = $1 WHERE id = $2 RETURNING *, created_at::text",
         [payment_status, id]
       );
+      return res.rows[0];
+    },
+    cancelOrder: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      const prev = await query("SELECT status FROM orders WHERE id = $1", [id]);
+      if (!prev.rows[0]) throw new Error('Commande introuvable');
+      if (prev.rows[0].status === 'CANCELLED') throw new Error('Commande déjà annulée');
+
+      // Stock was only ever decremented on the move into COMPLETED, so it is
+      // only given back when cancelling from that state.
+      if (prev.rows[0].status === 'COMPLETED') {
+        await restoreStockForOrder(id);
+      }
+
+      const res = await query(
+        "UPDATE orders SET status = 'CANCELLED', payment_status = 'UNPAID' WHERE id = $1 RETURNING *, created_at::text",
+        [id]
+      );
+      return res.rows[0];
+    },
+    restoreOrder: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+      // Comes back as PENDING, never straight to COMPLETED: re-confirming the
+      // delivery is what re-applies the stock movement.
+      const res = await query(
+        "UPDATE orders SET status = 'PENDING' WHERE id = $1 RETURNING *, created_at::text",
+        [id]
+      );
+      if (!res.rows[0]) throw new Error('Commande introuvable');
+      return res.rows[0];
+    },
+    updateOrderItem: async (_: any, { id, quantity, price }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      const cur = await query(
+        "SELECT order_id, product_id, quantity FROM order_items WHERE id = $1",
+        [id]
+      );
+      const line = cur.rows[0];
+      if (!line) throw new Error('Ligne introuvable');
+
+      const newQty = quantity == null ? line.quantity : Math.max(1, quantity);
+
+      // Keep stock in step with the edit, but only for an order that already
+      // took stock (COMPLETED); otherwise nothing was deducted to correct.
+      const ord = await query("SELECT status FROM orders WHERE id = $1", [line.order_id]);
+      if (ord.rows[0]?.status === 'COMPLETED' && line.product_id && newQty !== line.quantity) {
+        const delta = newQty - line.quantity;
+        await query(
+          "UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2",
+          [delta, line.product_id]
+        );
+      }
+
+      await query(
+        "UPDATE order_items SET quantity = $1, price = COALESCE($2, price) WHERE id = $3",
+        [newQty, price ?? null, id]
+      );
+      await recalculateOrderTotal(line.order_id);
+
+      const res = await query("SELECT *, created_at::text FROM orders WHERE id = $1", [line.order_id]);
+      return res.rows[0];
+    },
+    deleteOrderItem: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      const cur = await query(
+        "SELECT order_id, product_id, quantity FROM order_items WHERE id = $1",
+        [id]
+      );
+      const line = cur.rows[0];
+      if (!line) throw new Error('Ligne introuvable');
+
+      const ord = await query("SELECT status FROM orders WHERE id = $1", [line.order_id]);
+      if (ord.rows[0]?.status === 'COMPLETED' && line.product_id) {
+        await query(
+          "UPDATE products SET stock = stock + $1 WHERE id = $2",
+          [line.quantity, line.product_id]
+        );
+      }
+
+      await query("DELETE FROM order_items WHERE id = $1", [id]);
+      await recalculateOrderTotal(line.order_id);
+
+      const res = await query("SELECT *, created_at::text FROM orders WHERE id = $1", [line.order_id]);
       return res.rows[0];
     },
     createCharge: async (_: any, { description, amount, category, date }: any, context: any) => {

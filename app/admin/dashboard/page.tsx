@@ -13,6 +13,7 @@ import {
     Save,
     Plus,
     Trash2,
+    Edit3,
     ChevronRight,
     Image as ImageIcon,
     RefreshCcw,
@@ -2915,7 +2916,7 @@ function OrderManager() {
     const [orders, setOrders] = useState<any[]>([]);
     const [activeCarts, setActiveCarts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [paymentFilter, setPaymentFilter] = useState<'PAID' | 'UNPAID'>('UNPAID');
+    const [paymentFilter, setPaymentFilter] = useState<'PAID' | 'UNPAID' | 'CANCELLED'>('UNPAID');
 
     const fetchData = async (isInitial = false) => {
         if (isInitial) setLoading(true);
@@ -2926,7 +2927,7 @@ function OrderManager() {
                 cache: 'no-store',
                 body: JSON.stringify({
                     query: `{ 
-                        orders { id customer_email customer_phone total status payment_status created_at items { product_name quantity price size color } }
+                        orders { id customer_email customer_phone total status payment_status created_at items { id product_name quantity price size color } }
                         activeCarts { id session_id items updated_at }
                     }`
                 })
@@ -2981,6 +2982,97 @@ function OrderManager() {
         } catch (err) { console.error(err); }
     };
 
+    const runOrderMutation = async (query: string, variables: any, field: string, successText: string) => {
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables })
+            });
+            const data = await res.json();
+            if (!data.data?.[field]) throw new Error(data.errors?.[0]?.message || 'Opération échouée');
+            fetchData();
+            Swal.fire({ icon: 'success', title: 'Mis à jour !', text: successText, confirmButtonColor: '#000' });
+            return true;
+        } catch (err: any) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.message || 'Opération échouée.', confirmButtonColor: '#000' });
+            return false;
+        }
+    };
+
+    const handleCancelOrder = async (order: any) => {
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Annuler cette commande ?',
+            html: `<b>REF: SEA-${order.id}</b><br/>La commande est conservée dans l'historique, retirée du chiffre d'affaires${order.status === 'COMPLETED' ? ', et le stock est restitué' : ''}.`,
+            showCancelButton: true,
+            confirmButtonText: 'Annuler la commande',
+            cancelButtonText: 'Retour',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#000',
+        });
+        if (!confirm.isConfirmed) return;
+        await runOrderMutation(
+            'mutation($id: ID!) { cancelOrder(id: $id) { id status payment_status } }',
+            { id: order.id }, 'cancelOrder', 'Commande annulée.'
+        );
+    };
+
+    const handleRestoreOrder = async (order: any) => {
+        await runOrderMutation(
+            'mutation($id: ID!) { restoreOrder(id: $id) { id status } }',
+            { id: order.id }, 'restoreOrder', 'Commande réactivée (en préparation).'
+        );
+    };
+
+    const handleEditOrderItem = async (item: any) => {
+        const { value: formValues } = await Swal.fire({
+            title: item.product_name || 'Article',
+            html:
+                `<label style="display:block;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;margin-bottom:4px">Quantité</label>` +
+                `<input id="swal-qty" type="number" min="1" class="swal2-input" style="margin:0 0 16px 0;width:100%" value="${item.quantity}">` +
+                `<label style="display:block;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;margin-bottom:4px">Prix unitaire (TND)</label>` +
+                `<input id="swal-price" type="number" min="0" step="0.01" class="swal2-input" style="margin:0;width:100%" value="${item.price}">`,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Enregistrer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#000',
+            cancelButtonColor: '#9ca3af',
+            preConfirm: () => {
+                const qty = parseInt((document.getElementById('swal-qty') as HTMLInputElement).value, 10);
+                const price = parseFloat((document.getElementById('swal-price') as HTMLInputElement).value);
+                if (!qty || qty < 1) { Swal.showValidationMessage('Quantité invalide'); return false; }
+                if (isNaN(price) || price < 0) { Swal.showValidationMessage('Prix invalide'); return false; }
+                return { qty, price };
+            }
+        });
+        if (!formValues) return;
+        await runOrderMutation(
+            'mutation($id: ID!, $quantity: Int, $price: Float) { updateOrderItem(id: $id, quantity: $quantity, price: $price) { id total } }',
+            { id: item.id, quantity: formValues.qty, price: formValues.price },
+            'updateOrderItem', 'Article mis à jour, total recalculé.'
+        );
+    };
+
+    const handleDeleteOrderItem = async (item: any) => {
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Retirer cet article ?',
+            text: item.product_name || '',
+            showCancelButton: true,
+            confirmButtonText: 'Retirer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#000',
+        });
+        if (!confirm.isConfirmed) return;
+        await runOrderMutation(
+            'mutation($id: ID!) { deleteOrderItem(id: $id) { id total } }',
+            { id: item.id }, 'deleteOrderItem', 'Article retiré, total recalculé.'
+        );
+    };
+
     const handleDeleteActiveCart = async (sessionId: string) => {
         if (!confirm("Supprimer ce panier actif ?")) return;
         try {
@@ -2997,6 +3089,12 @@ function OrderManager() {
     };
 
     if (loading) return <div className="flex h-full items-center justify-center font-black tracking-[0.5em] text-black/5 animate-pulse uppercase">Chargement en temps réel...</div>;
+
+    // Cancelled orders live in their own tab: they would otherwise reappear
+    // under "Non payée", since cancelling also clears the payment flag.
+    const visibleOrders = paymentFilter === 'CANCELLED'
+        ? orders.filter(o => o.status === 'CANCELLED')
+        : orders.filter(o => o.payment_status === paymentFilter && o.status !== 'CANCELLED');
 
     // Parse each cart once, then drop the empty ones — a visitor who opened the
     // site without adding anything isn't useful to see here.
@@ -3109,24 +3207,30 @@ function OrderManager() {
                         >
                             Payée
                         </button>
+                        <button
+                            onClick={() => setPaymentFilter('CANCELLED')}
+                            className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentFilter === 'CANCELLED' ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'text-gray-400 hover:text-black'}`}
+                        >
+                            Annulée
+                        </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-8">
-                    {orders.filter(o => o.payment_status === paymentFilter).length === 0 ? (
+                    {visibleOrders.length === 0 ? (
                         <div className="bg-white rounded-[3rem] p-20 text-center border border-gray-100 italic text-gray-300 font-light">
-                            Aucune commande {paymentFilter === 'PAID' ? 'payée' : 'non payée'} à ce jour.
+                            Aucune commande {paymentFilter === 'PAID' ? 'payée' : paymentFilter === 'CANCELLED' ? 'annulée' : 'non payée'} à ce jour.
                         </div>
                     ) : (
-                        orders.filter(o => o.payment_status === paymentFilter).map((order) => (
+                        visibleOrders.map((order) => (
                             <div key={order.id} className="bg-white rounded-[3rem] p-12 border border-blue-50/50 shadow-2xl shadow-blue-50/20 overflow-hidden group hover:shadow-black/5 transition-all duration-700 relative">
                                 <div className="flex flex-col lg:flex-row justify-between items-start gap-12">
                                     <div className="flex-1 space-y-6">
                                         <div className="flex items-center flex-wrap gap-4">
                                             <span className="bg-gray-100 text-gray-500 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.3em] group-hover:bg-black group-hover:text-white transition-colors duration-500">REF: SEA-{order.id}</span>
                                             <span className="text-gray-300 text-[10px] font-bold uppercase tracking-widest">{order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : 'N/A'}</span>
-                                            <div className={`px-6 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${order.status === 'COMPLETED' ? 'bg-green-50 border-green-100 text-green-600 shadow-sm shadow-green-100' : 'bg-orange-50 border-orange-100 text-orange-600 animate-pulse'}`}>
-                                                {order.status === 'COMPLETED' ? 'LIVRÉE' : 'EN PRÉPARATION'}
+                                            <div className={`px-6 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${order.status === 'CANCELLED' ? 'bg-red-50 border-red-100 text-red-500' : order.status === 'COMPLETED' ? 'bg-green-50 border-green-100 text-green-600 shadow-sm shadow-green-100' : 'bg-orange-50 border-orange-100 text-orange-600 animate-pulse'}`}>
+                                                {order.status === 'CANCELLED' ? 'ANNULÉE' : order.status === 'COMPLETED' ? 'LIVRÉE' : 'EN PRÉPARATION'}
                                             </div>
                                             <button
                                                 onClick={() => updatePaymentStatus(order.id, order.payment_status === 'PAID' ? 'UNPAID' : 'PAID')}
@@ -3160,9 +3264,29 @@ function OrderManager() {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="font-black text-xl tracking-tighter">{item.price} TND</p>
-                                                        <p className="text-[9px] uppercase font-black tracking-widest text-black/20 mt-1">Quantité: {item.quantity}</p>
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="text-right">
+                                                            <p className="font-black text-xl tracking-tighter">{item.price} TND</p>
+                                                            <p className="text-[9px] uppercase font-black tracking-widest text-black/20 mt-1">Quantité: {item.quantity}</p>
+                                                        </div>
+                                                        {order.status !== 'CANCELLED' && item.id && (
+                                                            <div className="flex gap-2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={() => handleEditOrderItem(item)}
+                                                                    title="Modifier"
+                                                                    className="w-9 h-9 rounded-full bg-white border border-gray-100 text-gray-400 flex items-center justify-center hover:bg-black hover:text-white hover:border-black transition-all"
+                                                                >
+                                                                    <Edit3 size={13} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteOrderItem(item)}
+                                                                    title="Retirer"
+                                                                    className="w-9 h-9 rounded-full bg-white border border-red-100 text-red-300 flex items-center justify-center hover:bg-red-500 hover:text-white hover:border-red-500 transition-all"
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -3175,20 +3299,37 @@ function OrderManager() {
                                             <p className="text-6xl font-light tracking-tighter group-hover:scale-110 transition-transform duration-700 origin-left">{order.total}<span className="text-2xl ml-2 tracking-normal uppercase">TND</span></p>
                                         </div>
                                         <div className="space-y-4">
-                                            {order.status === 'PENDING' ? (
+                                            {order.status === 'CANCELLED' ? (
                                                 <button
-                                                    onClick={() => updateStatus(order.id, 'COMPLETED')}
-                                                    className="w-full h-16 bg-black text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-black/20 flex items-center justify-center gap-4 group/btn"
+                                                    onClick={() => handleRestoreOrder(order)}
+                                                    className="w-full h-16 bg-gray-100 text-gray-500 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all duration-500 flex items-center justify-center gap-4"
                                                 >
-                                                    <Save size={18} className="group-hover/btn:rotate-12 transition-transform" /> Confirmer Livraison
+                                                    <RefreshCcw size={18} /> Réactiver la commande
                                                 </button>
                                             ) : (
-                                                <button
-                                                    onClick={() => updateStatus(order.id, 'PENDING')}
-                                                    className="w-full h-16 bg-gray-100 text-gray-400 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all duration-500 flex items-center justify-center gap-4"
-                                                >
-                                                    <RefreshCcw size={18} /> Remettre en attente
-                                                </button>
+                                                <>
+                                                    {order.status === 'PENDING' ? (
+                                                        <button
+                                                            onClick={() => updateStatus(order.id, 'COMPLETED')}
+                                                            className="w-full h-16 bg-black text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-black/20 flex items-center justify-center gap-4 group/btn"
+                                                        >
+                                                            <Save size={18} className="group-hover/btn:rotate-12 transition-transform" /> Confirmer Livraison
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => updateStatus(order.id, 'PENDING')}
+                                                            className="w-full h-16 bg-gray-100 text-gray-400 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black hover:text-white transition-all duration-500 flex items-center justify-center gap-4"
+                                                        >
+                                                            <RefreshCcw size={18} /> Remettre en attente
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleCancelOrder(order)}
+                                                        className="w-full h-12 bg-white text-red-400 border border-red-100 rounded-[1.5rem] text-[9px] font-black uppercase tracking-[0.3em] hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-500 flex items-center justify-center gap-3"
+                                                    >
+                                                        <X size={14} /> Annuler la commande
+                                                    </button>
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -3217,7 +3358,7 @@ function AccountingManager() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: '{ orders { id total payment_status customer_email created_at items { id product_name quantity price size color } } charges { id description amount category date } }'
+                    query: '{ orders { id total status payment_status customer_email created_at items { id product_name quantity price size color } } charges { id description amount category date } }'
                 })
             });
             const data = await res.json();
@@ -3232,8 +3373,11 @@ function AccountingManager() {
 
     useEffect(() => { fetchData(true); }, []);
 
+    // A cancelled order never counts as revenue, whatever its payment flag says.
+    const isCountedSale = (o: any) => o.payment_status === 'PAID' && o.status !== 'CANCELLED';
+
     const totalRevenue = orders
-        .filter(o => o.payment_status === 'PAID')
+        .filter(isCountedSale)
         .reduce((sum, o) => sum + parseFloat(o.total), 0);
 
     const totalExpenses = charges.reduce((sum, c) => sum + parseFloat(c.amount), 0);
@@ -3459,7 +3603,7 @@ function AccountingManager() {
                                     </thead>
                                     <tbody>
                                         {orders
-                                            .filter(o => o.payment_status === 'PAID')
+                                            .filter(isCountedSale)
                                             .map(order => (
                                                 // Orders placed before order_items stopped cascading on
                                                 // product deletion have no lines left. Their date, client
@@ -3518,7 +3662,7 @@ function AccountingManager() {
                                     </tbody>
                                 </table>
                             </div>
-                            {orders.filter(o => o.payment_status === 'PAID').length === 0 && (
+                            {orders.filter(isCountedSale).length === 0 && (
                                 <div className="py-20 text-center">
                                     <p className="text-gray-300 italic font-light">Aucune vente enregistrée pour le moment.</p>
                                 </div>
@@ -3532,15 +3676,15 @@ function AccountingManager() {
                                     <p className="text-[7px] md:text-[8px] font-bold uppercase text-gray-400 mb-1">Total Items</p>
                                     <p className="text-lg md:text-xl font-light">
                                         {orders
-                                            .filter(o => o.payment_status === 'PAID')
+                                            .filter(isCountedSale)
                                             .reduce((sum, o) => sum + (o.items?.reduce((iSum: number, i: any) => iSum + i.quantity, 0) || 0), 0)
                                         } Produits
                                     </p>
                                     {/* The quantity of an order whose lines were lost is unknown,
                                         so it is left out of the count rather than guessed. */}
-                                    {orders.filter(o => o.payment_status === 'PAID' && !o.items?.length).length > 0 && (
+                                    {orders.filter(o => isCountedSale(o) && !o.items?.length).length > 0 && (
                                         <p className="text-[7px] md:text-[8px] font-medium italic text-gray-400 mt-1">
-                                            + {orders.filter(o => o.payment_status === 'PAID' && !o.items?.length).length} commande(s) sans détail
+                                            + {orders.filter(o => isCountedSale(o) && !o.items?.length).length} commande(s) sans détail
                                         </p>
                                     )}
                                 </div>
