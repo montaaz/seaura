@@ -83,17 +83,7 @@ export default function Footer({ onSubscribe }: FooterProps) {
                     </div>
                 </div>
 
-                <div className={styles.footerCol}>
-                    <h3 className={styles.footerHeading}>SHOP WITH SEAURA</h3>
-                    <ul className={styles.footerLinks}>
-                        <li><Link href="/shop">Shop All</Link></li>
-                        <li><Link href="/shop">New Arrivals</Link></li>
-                        <li><Link href="/shop">Artisanal Products</Link></li>
-                        <li><Link href="/shop?category=sacs">Sacs</Link></li>
-                        <li><Link href="/shop?category=bijoux">Bijoux</Link></li>
-                        <li><Link href="/shop?category=vêtements">Vêtements</Link></li>
-                    </ul>
-                </div>
+       
 
                 <div className={styles.footerCol}>
                     <h3 className={styles.footerHeading}>CUSTOMER SERVICE</h3>
