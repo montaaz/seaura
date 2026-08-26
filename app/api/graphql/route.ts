@@ -444,6 +444,8 @@ const typeDefs = gql`
     cancelOrder(id: ID!): Order!
     "Restores a cancelled order to PENDING."
     restoreOrder(id: ID!): Order!
+    "Permanently deletes an order and its lines. Irreversible - the sale disappears from history and from revenue."
+    deleteOrder(id: ID!): Boolean!
     updateOrderItem(id: ID!, quantity: Int, price: Float): Order!
     deleteOrderItem(id: ID!): Order!
     createSubCategory(name: String!, category_id: ID!, image_url: String): SubCategory!
@@ -478,7 +480,13 @@ const resolvers = {
       const res = await query(`
         SELECT p.id, p.name, p.price, p.description, p.category_id, p.sub_category_id,
                p.colors, p.sizes, p.has_sizes, p.stock, p.created_at,
-               left(md5(coalesce(p.image_url,'') || coalesce(p.images::text,'')), 8) AS v,
+               -- Fingerprint from the write timestamp, NOT from hashing the
+               -- image bytes. Hashing image_url || images::text forced Postgres
+               -- to detoast and md5 every multi-MB base64 blob on every listing
+               -- (~3s across 180MB), which is why a newly added product took so
+               -- long to appear. updated_at changes on every write, so it busts
+               -- the browser cache just as reliably for free.
+               left(md5(extract(epoch from coalesce(p.updated_at, p.created_at))::text), 8) AS v,
                -- Count only, so the multi-MB base64 blobs stay out of this query.
                jsonb_array_length(coalesce(p.images, '[]'::jsonb)) AS image_count,
                d.percent AS discount_percent
@@ -742,7 +750,9 @@ const resolvers = {
     createProduct: async (_: any, { name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
       const res = await query(
-        "INSERT INTO products (name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
+        // RETURNING the specific columns rather than * keeps the multi-MB
+        // base64 blobs we just wrote from being sent straight back to us.
+        "INSERT INTO products (name, description, price, image_url, category_id, sub_category_id, colors, images, sizes, has_sizes, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, name, description, price, category_id, sub_category_id, colors, sizes, has_sizes, stock, created_at",
         [name, description, price, image_url, category_id, sub_category_id || null, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock || 10]
       );
       return res.rows[0];
@@ -757,7 +767,9 @@ const resolvers = {
       const prevStock = prevRes.rows[0]?.stock ?? 0;
 
       const res = await query(
-        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, sub_category_id = $6, colors = $7, images = $8, sizes = $9, has_sizes = $10, stock = $11 WHERE id = $12 RETURNING *",
+        // Named columns instead of * — see createProduct: returning the base64
+        // blobs we just wrote doubles the cost of every save for no benefit.
+        "UPDATE products SET name = $1, description = $2, price = $3, image_url = $4, category_id = $5, sub_category_id = $6, colors = $7, images = $8, sizes = $9, has_sizes = $10, stock = $11 WHERE id = $12 RETURNING id, name, description, price, category_id, sub_category_id, colors, sizes, has_sizes, stock, created_at",
         [name, description, price, image_url, category_id, sub_category_id || null, JSON.stringify(colors || []), JSON.stringify(images || []), JSON.stringify(sizes || []), has_sizes !== undefined ? has_sizes : true, stock, id]
       );
 
@@ -1017,6 +1029,25 @@ const resolvers = {
       );
       if (!res.rows[0]) throw new Error('Commande introuvable');
       return res.rows[0];
+    },
+    // Hard delete, unlike cancelOrder which keeps the row for the record.
+    // Used when an order must leave the database entirely.
+    deleteOrder: async (_: any, { id }: any, context: any) => {
+      if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');
+
+      const prev = await query("SELECT status FROM orders WHERE id = $1", [id]);
+      if (!prev.rows[0]) throw new Error('Commande introuvable');
+
+      // A COMPLETED order still holds the stock it deducted. Give it back
+      // before the lines are gone, or those units are lost from inventory.
+      // CANCELLED orders already returned theirs, so skip them.
+      if (prev.rows[0].status === 'COMPLETED') {
+        await restoreStockForOrder(id);
+      }
+
+      // order_items.order_id is ON DELETE CASCADE, so the lines go with it.
+      const res = await query("DELETE FROM orders WHERE id = $1", [id]);
+      return (res.rowCount ?? 0) > 0;
     },
     updateOrderItem: async (_: any, { id, quantity, price }: any, context: any) => {
       if (context.session?.user?.role !== 'ADMIN') throw new Error('Not authorized');

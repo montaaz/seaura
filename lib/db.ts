@@ -79,6 +79,12 @@ export const initDb = async () => {
       ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 10;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_category_id INTEGER REFERENCES sub_categories(id) ON DELETE SET NULL;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS has_sizes BOOLEAN DEFAULT TRUE;
+      -- Image cache-busting fingerprint. The list query used to build this by
+      -- hashing image_url || images::text, which forced Postgres to detoast and
+      -- md5 every multi-MB base64 blob on every product listing (~3s over 180MB
+      -- of images). A timestamp bumped on write gives the same "did the image
+      -- change?" signal without ever reading the blobs.
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
       -- Order columns
       -- First-order discount: recorded per order so the amount granted is
@@ -184,9 +190,35 @@ export const initDb = async () => {
         CREATE EXTENSION IF NOT EXISTS pg_trgm;
         CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING GIN (name gin_trgm_ops);
         CREATE INDEX IF NOT EXISTS idx_products_description_trgm ON products USING GIN (description gin_trgm_ops);
+        -- Backs the product listing's ORDER BY created_at DESC.
+        CREATE INDEX IF NOT EXISTS idx_products_created_at ON products (created_at DESC);
       `);
     } catch (e) {
       console.warn('Could not create search indexes (likely permission issues):', e);
+    }
+
+    // Keeps products.updated_at current so the image cache-busting fingerprint
+    // never has to hash the base64 blobs. Runs on every write to the row.
+    try {
+      await client.query(`
+        CREATE OR REPLACE FUNCTION touch_products_updated_at() RETURNS trigger AS $$
+        BEGIN
+          NEW.updated_at := NOW();
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        DROP TRIGGER IF EXISTS trg_products_updated_at ON products;
+        CREATE TRIGGER trg_products_updated_at
+          BEFORE INSERT OR UPDATE ON products
+          FOR EACH ROW EXECUTE FUNCTION touch_products_updated_at();
+
+        -- Rows that predate the column have a NULL fingerprint source; seed them
+        -- once from created_at so their image URLs stay stable.
+        UPDATE products SET updated_at = COALESCE(created_at, NOW()) WHERE updated_at IS NULL;
+      `);
+    } catch (e) {
+      console.warn('Could not install products.updated_at trigger:', e);
     }
 
     client.release();

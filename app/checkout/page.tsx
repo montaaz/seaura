@@ -293,10 +293,12 @@ export default function CheckoutPage() {
                                         <td>Moyen de paiement :</td>
                                         <td>Paiement à la livraison</td>
                                     </tr>
-                                    <tr>
-                                        <td>Téléphone d'urgence:</td>
-                                        <td>{orderSummary.billing.emergencyPhone}</td>
-                                    </tr>
+                                    {orderSummary.billing.emergencyPhone && (
+                                        <tr>
+                                            <td>Téléphone d'urgence:</td>
+                                            <td>{orderSummary.billing.emergencyPhone}</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -367,8 +369,8 @@ export default function CheckoutPage() {
 
                                 <div className={styles.formGroupFull}>
                                     <div className={styles.formGroup}>
-                                        <label>Téléphone d'urgence *</label>
-                                        <input type="tel" name="emergencyPhone" required value={formData.emergencyPhone} onChange={handleInputChange} />
+                                        <label>Téléphone d'urgence (optionnel)</label>
+                                        <input type="tel" name="emergencyPhone" value={formData.emergencyPhone} onChange={handleInputChange} />
                                     </div>
                                 </div>
                             </div>

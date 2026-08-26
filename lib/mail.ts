@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { randomUUID } from 'crypto';
 import { query } from './db';
 
 /**
@@ -28,14 +29,22 @@ async function resolveSmtpConfig(fromName?: string) {
         throw new Error('SMTP non configuré. Veuillez renseigner les paramètres SMTP dans l\'administration.');
     }
 
+    // Without this, nodemailer builds the Message-ID and the EHLO greeting from
+    // the machine's own hostname — on a bare-IP server that yields a
+    // Message-ID like <...@41.231.54.144>, which reads as spam. Anchor both to
+    // the authenticated sender's domain instead, so they line up with the
+    // From: address Gmail is already authenticating via DKIM.
+    const senderDomain = SMTP_USER.split('@')[1] || 'localhost';
+
     const transporter = nodemailer.createTransport({
         host: SMTP_HOST,
         port: parseInt(SMTP_PORT),
         secure: SMTP_SECURE,
         auth: { user: SMTP_USER, pass: SMTP_PASS },
+        name: senderDomain,
     });
 
-    return { transporter, SMTP_HOST, SMTP_USER, SMTP_FROM_NAME };
+    return { transporter, SMTP_HOST, SMTP_USER, SMTP_FROM_NAME, senderDomain };
 }
 
 /** Turns an opaque SMTP auth failure into instructions the admin can act on. */
@@ -69,7 +78,7 @@ function escapeHtml(s: string) {
 }
 
 export async function sendEmail({ from, to, subject, content, images, unsubscribeEmail }: { from: string, to: string[], subject: string, content: string, images: string[], unsubscribeEmail?: string }) {
-    const { transporter, SMTP_HOST, SMTP_USER, SMTP_FROM_NAME } = await resolveSmtpConfig(from);
+    const { transporter, SMTP_HOST, SMTP_USER, SMTP_FROM_NAME, senderDomain } = await resolveSmtpConfig(from);
 
     const attachments = (images || []).map((img, i) => {
         // Extract content and type from base64 data url
@@ -86,10 +95,18 @@ export async function sendEmail({ from, to, subject, content, images, unsubscrib
         return null;
     }).filter(Boolean) as any[];
 
-    const siteUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
-    // Mailto unsubscribe works without a public site; the URL form is added only
-    // when the site is actually reachable (not localhost).
-    const isPublicSite = /^https?:\/\//.test(siteUrl) && !/localhost|127\.0\.0\.1/.test(siteUrl);
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '');
+
+    // A bare IP or a :port in a link is one of the strongest spam signals there
+    // is, and it leaks where the server lives. Only a real hostname is ever put
+    // in front of a recipient; anything else falls back to the mailto opt-out.
+    const host = (() => {
+        try { return new URL(siteUrl).hostname; } catch { return ''; }
+    })();
+    const isIpAddress = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
+    const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(host);
+    // Requires a dotted hostname, so "http://server:3000" is rejected too.
+    const isPublicSite = /^https?:\/\//.test(siteUrl) && !isLocal && !isIpAddress && host.includes('.');
 
     const unsubMailto = `<mailto:${SMTP_USER}?subject=Unsubscribe>`;
     const unsubUrl = isPublicSite && unsubscribeEmail
@@ -118,6 +135,8 @@ export async function sendEmail({ from, to, subject, content, images, unsubscrib
                 </p>
             </div>
         `,
+        // Domain of the authenticated sender, never the server's IP hostname.
+        messageId: `<${randomUUID()}@${senderDomain}>`,
         headers: {
             // Tells Gmail/Outlook this is bulk mail with a genuine opt-out, which
             // is what they look for before showing the one-click unsubscribe.

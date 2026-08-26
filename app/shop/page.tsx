@@ -83,6 +83,14 @@ function ShopListing() {
             .find((s: any) => String(s.id) === String(activeSubFilter))?.name
         : null;
 
+    // Sub-categories of the selected category. They were fetched and already
+    // drove filtering via ?sub_category=, but the shop had no UI to pick one,
+    // so entries like "Bijoux" / "Porte clé" were only reachable from the menu.
+    const activeSubCategories =
+        activeFilter === "ALL"
+            ? []
+            : categories.find((c: any) => String(c.id) === String(activeFilter))?.sub_categories || [];
+
     const filteredProducts = products.filter(p => {
         const matchesCategory = searchQuery ? true : (activeFilter === "ALL" || String(p.category_id) === String(activeFilter));
         const matchesSubCategory = searchQuery || !activeSubFilter || String(p.sub_category_id) === String(activeSubFilter);
@@ -275,6 +283,26 @@ function ShopListing() {
                         </span>
                     ))}
                 </div>
+
+                {activeSubCategories.length > 0 && (
+                    <div className={styles.subCatNav}>
+                        <span
+                            className={`${styles.subCatNavItem} ${!activeSubFilter ? styles.subCatNavItemActive : ""}`}
+                            onClick={() => setActiveSubFilter(null)}
+                        >
+                            Tout
+                        </span>
+                        {activeSubCategories.map((sub: any) => (
+                            <span
+                                key={sub.id}
+                                className={`${styles.subCatNavItem} ${String(activeSubFilter) === String(sub.id) ? styles.subCatNavItemActive : ""}`}
+                                onClick={() => setActiveSubFilter(String(sub.id))}
+                            >
+                                {sub.name}
+                            </span>
+                        ))}
+                    </div>
+                )}
 
                 <div className={styles.filterBar}>
                     <div className={styles.filterGroup}>

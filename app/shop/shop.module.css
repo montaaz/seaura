@@ -922,6 +922,44 @@
     text-underline-offset: 4px;
 }
 
+/* Sub-category row. Appears under the category nav only when the selected
+   category actually has sub-categories, so it never leaves an empty gap. */
+.subCatNav {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 14px;
+    margin-top: -8px;
+    margin-bottom: 18px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.subCatNav::-webkit-scrollbar {
+    display: none;
+}
+
+.subCatNavItem {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.3s;
+    font-weight: 400;
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+}
+
+.subCatNavItem:hover {
+    color: #000;
+}
+
+.subCatNavItemActive {
+    color: #000;
+    font-weight: 600;
+    border-bottom-color: #000;
+}
+
 .filterBar {
     display: flex;
     gap: 10px;

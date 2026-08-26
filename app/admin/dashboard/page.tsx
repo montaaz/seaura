@@ -272,13 +272,16 @@ export default function AdminDashboard() {
                     <ChevronLeft size={16} />
                 </button>
 
-                <div className="mb-12">
+                <div className="mb-12 flex-shrink-0">
                     <h1 className="text-2xl font-black tracking-[0.3em] text-black">SEAURA</h1>
                     <div className="h-[2px] w-full bg-black mt-2 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-[0.4em] text-black/30">Management Console</p>
                 </div>
 
-                <nav className="flex-1 space-y-3">
+                {/* min-h-0 lets this flex child shrink below its content height;
+                    without it the nav keeps its natural size and the items at the
+                    bottom (System, Log out) are clipped on short viewports. */}
+                <nav className="flex-1 min-h-0 overflow-y-auto space-y-3 custom-scrollbar -mr-4 pr-4">
                     <button
                         onClick={() => { setActiveTab('products'); setIsSidebarOpen(false); }}
                         className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 ${activeTab === 'products' ? 'bg-black text-white shadow-xl shadow-black/10' : 'hover:bg-gray-50 text-gray-400 font-medium'}`}
@@ -383,7 +386,7 @@ export default function AdminDashboard() {
 
                 <button
                     onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-                    className="mt-auto flex items-center gap-4 text-red-500 px-6 py-4 hover:bg-red-50 rounded-2xl transition-all duration-300 group"
+                    className="mt-4 flex-shrink-0 flex items-center gap-4 text-red-500 px-6 py-4 hover:bg-red-50 rounded-2xl transition-all duration-300 group"
                 >
                     <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
                     <span className="text-sm font-medium">Log out</span>
@@ -764,23 +767,12 @@ function ProductManager() {
                             ))}
                         </tbody>
                     </table>
+                    {/* .custom-scrollbar now lives in globals.css so it survives
+                        this component unmounting. */}
                     <style jsx global>{`
                         @keyframes scroll-indicator {
                             0%, 100% { opacity: 0.2; transform: translateY(0); }
                             50% { opacity: 0.8; transform: translateY(5px); }
-                        }
-                        .custom-scrollbar::-webkit-scrollbar {
-                            width: 6px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-track {
-                            background: transparent;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb {
-                            background: rgba(0,0,0,0.05);
-                            border-radius: 10px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                            background: rgba(0,0,0,0.1);
                         }
                     `}</style>
                 </div>
@@ -3025,6 +3017,44 @@ function OrderManager() {
         );
     };
 
+    // Hard delete. Separate from handleCancelOrder, which keeps the record.
+    // Requires typing the reference: there is no undo once the row is gone.
+    const handleDeleteOrder = async (order: any) => {
+        const ref = `SEA-${order.id}`;
+        const confirm = await Swal.fire({
+            icon: 'warning',
+            title: 'Supprimer définitivement ?',
+            html: `<b>REF: ${ref}</b><br/>La commande et ses articles seront effacés de la base de données.<br/><b>Cette action est irréversible.</b>${order.status === 'COMPLETED' ? '<br/><br/>Le stock sera restitué.' : ''}<br/><br/>Tapez <b>${ref}</b> pour confirmer :`,
+            input: 'text',
+            inputPlaceholder: ref,
+            showCancelButton: true,
+            confirmButtonText: 'Supprimer',
+            cancelButtonText: 'Retour',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#000',
+            inputValidator: (value) =>
+                value.trim().toUpperCase() !== ref ? 'La référence ne correspond pas.' : null,
+        });
+        if (!confirm.isConfirmed) return;
+
+        try {
+            const res = await fetch('/api/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: 'mutation($id: ID!) { deleteOrder(id: $id) }',
+                    variables: { id: order.id }
+                })
+            });
+            const data = await res.json();
+            if (!data.data?.deleteOrder) throw new Error(data.errors?.[0]?.message || 'Suppression échouée');
+            fetchData();
+            Swal.fire({ icon: 'success', title: 'Supprimée', text: `La commande ${ref} a été supprimée.`, confirmButtonColor: '#000' });
+        } catch (err: any) {
+            Swal.fire({ icon: 'error', title: 'Erreur', text: err.message || 'Suppression échouée.', confirmButtonColor: '#000' });
+        }
+    };
+
     const handleEditOrderItem = async (item: any) => {
         const { value: formValues } = await Swal.fire({
             title: item.product_name || 'Article',
@@ -3331,6 +3361,16 @@ function OrderManager() {
                                                     </button>
                                                 </>
                                             )}
+
+                                            {/* Outside the branch above: a cancelled order can be
+                                                deleted too. Visually separated so it is not mistaken
+                                                for the reversible "Annuler" action. */}
+                                            <button
+                                                onClick={() => handleDeleteOrder(order)}
+                                                className="w-full h-12 mt-2 bg-red-500 text-white rounded-[1.5rem] text-[9px] font-black uppercase tracking-[0.3em] hover:bg-red-600 transition-all duration-500 flex items-center justify-center gap-3"
+                                            >
+                                                <Trash2 size={14} /> Supprimer définitivement
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -3419,62 +3459,94 @@ function AccountingManager() {
     };
 
     return (
-        <div className="space-y-12 pb-20">
+        <div className="space-y-6 md:space-y-12 pb-20">
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-8">
                 <div
                     onClick={() => setShowSalesModal(true)}
-                    className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all cursor-pointer"
+                    className="bg-white rounded-3xl md:rounded-[3rem] p-6 md:p-10 border border-gray-100 shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all cursor-pointer"
                 >
-                    <div className="absolute top-[-20px] right-[-20px] bg-green-50 w-32 h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="absolute top-[-20px] right-[-20px] bg-green-50 w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                         <TrendingUp size={40} className="text-green-500 opacity-20" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Chiffre d'Affaires (Payé)</p>
-                    <h3 className="text-4xl font-light">{totalRevenue.toLocaleString()} TND</h3>
-                    <div className="mt-6 flex items-center gap-2 text-green-500 font-bold text-[10px]">
+                    <p className="relative text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-gray-400 mb-2 pr-16">Chiffre d'Affaires (Payé)</p>
+                    <h3 className="relative text-3xl md:text-4xl font-light break-words">{totalRevenue.toLocaleString()} TND</h3>
+                    <div className="relative mt-4 md:mt-6 flex items-center gap-2 text-green-500 font-bold text-[10px]">
                         <Plus size={12} /> VOIR DÉTAIL DES VENTES
                     </div>
                 </div>
 
-                <div className="bg-white rounded-[3rem] p-10 border border-gray-100 shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all">
-                    <div className="absolute top-[-20px] right-[-20px] bg-red-50 w-32 h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="bg-white rounded-3xl md:rounded-[3rem] p-6 md:p-10 border border-gray-100 shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all">
+                    <div className="absolute top-[-20px] right-[-20px] bg-red-50 w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                         <TrendingDown size={40} className="text-red-500 opacity-20" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Total des Charges</p>
-                    <h3 className="text-4xl font-light">{totalExpenses.toLocaleString()} TND</h3>
-                    <div className="mt-6 flex items-center gap-2 text-red-500 font-bold text-[10px]">
+                    <p className="relative text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-gray-400 mb-2 pr-16">Total des Charges</p>
+                    <h3 className="relative text-3xl md:text-4xl font-light break-words">{totalExpenses.toLocaleString()} TND</h3>
+                    <div className="relative mt-4 md:mt-6 flex items-center gap-2 text-red-500 font-bold text-[10px]">
                         <Minus size={12} /> DÉPENSÉ
                     </div>
                 </div>
 
-                <div className="bg-black rounded-[3rem] p-10 shadow-2xl relative overflow-hidden group hover:scale-105 transition-all text-white">
-                    <div className="absolute top-[-20px] right-[-20px] bg-white/10 w-32 h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="bg-black rounded-3xl md:rounded-[3rem] p-6 md:p-10 shadow-2xl relative overflow-hidden group md:hover:scale-105 transition-all text-white sm:col-span-2 md:col-span-1">
+                    <div className="absolute top-[-20px] right-[-20px] bg-white/10 w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
                         <DollarSign size={40} className="text-white opacity-20" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 mb-2">Bénéfice Net</p>
-                    <h3 className="text-4xl font-light">{totalProfit.toLocaleString()} TND</h3>
-                    <div className="mt-6 flex items-center gap-2 text-white/60 font-bold text-[10px]">
+                    <p className="relative text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-white/40 mb-2 pr-16">Bénéfice Net</p>
+                    <h3 className="relative text-3xl md:text-4xl font-light break-words">{totalProfit.toLocaleString()} TND</h3>
+                    <div className="relative mt-4 md:mt-6 flex items-center gap-2 text-white/60 font-bold text-[10px]">
                         <PieChart size={12} /> PERFORMANCE
                     </div>
                 </div>
             </div>
 
             {/* Charges Management */}
-            <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-10 border-b border-gray-100 flex justify-between items-center">
+            <div className="bg-white rounded-3xl md:rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 md:p-10 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <Calculator className="text-gray-300" />
-                        <h3 className="text-xl font-light">Gestion des Charges & Achats</h3>
+                        <Calculator className="text-gray-300 shrink-0" size={20} />
+                        <h3 className="text-lg md:text-xl font-light">Gestion des Charges & Achats</h3>
                     </div>
                     <button
                         onClick={() => setIsAddingCharge(true)}
-                        className="bg-black text-white px-8 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest hover:scale-105 transition-all flex items-center gap-2"
+                        className="w-full sm:w-auto shrink-0 bg-black text-white px-6 md:px-8 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest md:hover:scale-105 transition-all flex items-center justify-center gap-2"
                     >
                         <Plus size={16} /> Ajouter une Charge
                     </button>
                 </div>
 
-                <div className="p-2 overflow-x-auto">
+                {/* Mobile: card list (a 5-column table cannot fit a phone) */}
+                <div className="md:hidden divide-y divide-gray-50">
+                    {charges.map((c: any) => (
+                        <div key={c.id} className="p-5 flex items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium break-words">{c.description}</p>
+                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                    <span className="text-[10px] text-gray-400 font-medium">
+                                        {c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '—'}
+                                    </span>
+                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${c.category === 'Stock' ? 'bg-blue-50 text-blue-600' :
+                                        c.category === 'Marketing' ? 'bg-purple-50 text-purple-600' :
+                                            c.category === 'Services' ? 'bg-orange-50 text-orange-600' :
+                                                'bg-gray-100 text-gray-500'
+                                        }`}>
+                                        {c.category || "Autre"}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                                <span className="text-sm font-bold text-red-500 whitespace-nowrap">-{c.amount} TND</span>
+                                <button onClick={() => handleDeleteCharge(c.id)} className="p-2 hover:bg-red-50 text-red-300 hover:text-red-500 transition-all rounded-full">
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    {charges.length === 0 && (
+                        <div className="p-12 text-center text-gray-300 italic font-light text-sm">Aucune charge enregistrée.</div>
+                    )}
+                </div>
+
+                <div className="hidden md:block p-2 overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] border-b border-gray-50">
@@ -3519,10 +3591,10 @@ function AccountingManager() {
 
             {/* Modal Add Charge */}
             {isAddingCharge && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-8" onClick={() => setIsAddingCharge(false)}>
-                    <div className="bg-white rounded-[3rem] p-12 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-2xl font-light mb-10">Nouvelle Dépense</h3>
-                        <form onSubmit={handleAddCharge} className="space-y-6">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-8 overflow-y-auto" onClick={() => setIsAddingCharge(false)}>
+                    <div className="bg-white rounded-3xl md:rounded-[3rem] p-6 md:p-12 max-w-xl w-full my-auto max-h-[92vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl md:text-2xl font-light mb-6 md:mb-10">Nouvelle Dépense</h3>
+                        <form onSubmit={handleAddCharge} className="space-y-5 md:space-y-6">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Date d'achat</label>
                                 <input
@@ -3541,7 +3613,7 @@ function AccountingManager() {
                                     onChange={e => setNewCharge({ ...newCharge, description: e.target.value })}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Montant (TND)</label>
                                     <input
@@ -3565,9 +3637,9 @@ function AccountingManager() {
                                     </select>
                                 </div>
                             </div>
-                            <div className="flex gap-4 pt-10">
-                                <button type="button" onClick={() => setIsAddingCharge(false)} className="flex-1 h-16 rounded-full border border-gray-100 text-[11px] font-bold uppercase tracking-widest text-gray-400">Annuler</button>
-                                <button type="submit" className="flex-1 h-16 rounded-full bg-black text-white text-[11px] font-bold uppercase tracking-widest hover:scale-105 transition-all">Enregistrer</button>
+                            <div className="flex gap-3 md:gap-4 pt-6 md:pt-10">
+                                <button type="button" onClick={() => setIsAddingCharge(false)} className="flex-1 h-14 md:h-16 rounded-full border border-gray-100 text-[11px] font-bold uppercase tracking-widest text-gray-400">Annuler</button>
+                                <button type="submit" className="flex-1 h-14 md:h-16 rounded-full bg-black text-white text-[11px] font-bold uppercase tracking-widest md:hover:scale-105 transition-all">Enregistrer</button>
                             </div>
                         </form>
                     </div>
@@ -3576,20 +3648,20 @@ function AccountingManager() {
 
             {/* Sales Details Modal */}
             {showSalesModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-8" onClick={() => setShowSalesModal(false)}>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-3 md:p-8" onClick={() => setShowSalesModal(false)}>
                     <div className="bg-white rounded-[1.5rem] md:rounded-[3rem] w-full max-w-5xl h-[90vh] md:h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="p-8 md:p-12 border-b border-gray-50 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-2xl md:text-3xl font-light tracking-tight">Journal des Ventes</h3>
-                                <p className="text-[9px] md:text-xs text-gray-400 font-bold uppercase tracking-[0.2em] mt-2">Détail des produits vendus (Commandes Payées uniquement)</p>
+                        <div className="p-6 md:p-12 border-b border-gray-50 flex justify-between items-start md:items-center gap-4">
+                            <div className="min-w-0">
+                                <h3 className="text-xl md:text-3xl font-light tracking-tight">Journal des Ventes</h3>
+                                <p className="text-[9px] md:text-xs text-gray-400 font-bold uppercase tracking-[0.15em] md:tracking-[0.2em] mt-2">Détail des produits vendus (Commandes Payées uniquement)</p>
                             </div>
-                            <button onClick={() => setShowSalesModal(false)} className="w-10 h-10 md:w-12 md:h-12 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-all">
+                            <button onClick={() => setShowSalesModal(false)} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-all">
                                 <X size={24} />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto overflow-x-auto p-6 md:p-12 custom-scrollbar">
-                            <div className="min-w-[800px]">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-x-auto p-4 md:p-12 custom-scrollbar">
+                            <div className="hidden md:block min-w-[800px]">
                                 <table className="w-full text-left border-separate border-spacing-y-4">
                                     <thead>
                                         <tr className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">
@@ -3662,16 +3734,58 @@ function AccountingManager() {
                                     </tbody>
                                 </table>
                             </div>
+
+                            {/* Mobile: card list — a 6-column journal cannot fit a phone */}
+                            <div className="md:hidden space-y-3">
+                                {orders
+                                    .filter(isCountedSale)
+                                    .map(order => (
+                                        !order.items?.length ? (
+                                            <div key={order.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm shadow-black/5">
+                                                <div className="flex justify-between items-start gap-3">
+                                                    <p className="text-sm font-medium italic tracking-tight text-gray-400 min-w-0 break-words">Détail indisponible</p>
+                                                    <span className="text-sm font-black tracking-tighter text-black whitespace-nowrap shrink-0">{order.total} TND</span>
+                                                </div>
+                                                <p className="mt-2 text-[11px] text-gray-500 italic break-all">{order.customer_email}</p>
+                                                <p className="mt-1.5 text-[10px] font-bold text-gray-400">
+                                                    {order.created_at && !isNaN(new Date(order.created_at).getTime())
+                                                        ? new Date(order.created_at).toLocaleDateString('fr-FR')
+                                                        : 'N/A'}
+                                                </p>
+                                            </div>
+                                        ) : order.items?.map((item: any, idx: number) => (
+                                            <div key={`${order.id}-${idx}`} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm shadow-black/5">
+                                                <div className="flex justify-between items-start gap-3">
+                                                    <p className="text-sm font-bold uppercase tracking-tight text-black min-w-0 break-words">{item.product_name}</p>
+                                                    <span className="text-sm font-black tracking-tighter text-black whitespace-nowrap shrink-0">{item.price} TND</span>
+                                                </div>
+                                                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                                    <span className="text-[8px] font-black tracking-widest bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md uppercase text-gray-400">{item.size}</span>
+                                                    <span className="text-[8px] font-black tracking-widest bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md uppercase text-gray-400">{item.color}</span>
+                                                    <span className="text-[10px] font-bold text-gray-500">x{item.quantity}</span>
+                                                </div>
+                                                <p className="mt-2 text-[11px] text-gray-500 italic break-all">{order.customer_email}</p>
+                                                <p className="mt-1.5 text-[10px] font-bold text-gray-400">
+                                                    {order.created_at && !isNaN(new Date(order.created_at).getTime())
+                                                        ? new Date(order.created_at).toLocaleDateString('fr-FR')
+                                                        : 'N/A'}
+                                                </p>
+                                            </div>
+                                        ))
+                                    ))
+                                }
+                            </div>
+
                             {orders.filter(isCountedSale).length === 0 && (
                                 <div className="py-20 text-center">
-                                    <p className="text-gray-300 italic font-light">Aucune vente enregistrée pour le moment.</p>
+                                    <p className="text-gray-300 italic font-light text-sm">Aucune vente enregistrée pour le moment.</p>
                                 </div>
                             )}
                         </div>
 
-                        <div className="p-8 md:p-10 bg-gray-50/50 border-t border-gray-50 flex justify-between items-center px-8 md:px-12">
+                        <div className="p-5 md:p-10 bg-gray-50/50 border-t border-gray-50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 px-5 md:px-12">
                             <p className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-black/20">Synthèse Global</p>
-                            <div className="flex gap-8 md:gap-12">
+                            <div className="flex justify-between sm:justify-end gap-6 md:gap-12">
                                 <div className="text-right">
                                     <p className="text-[7px] md:text-[8px] font-bold uppercase text-gray-400 mb-1">Total Items</p>
                                     <p className="text-lg md:text-xl font-light">

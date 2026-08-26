@@ -130,3 +130,28 @@ input[type="date"]::-webkit-clear-button {
     @apply backdrop-blur-3xl bg-white/70 border border-white/50;
   }
 }
+/* Thin scrollbar for internally-scrolling panels (admin sidebar, CMS editor).
+   Defined globally: it was previously declared inside a component's styled-jsx
+   block, so the styling disappeared whenever that component unmounted. */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+}
