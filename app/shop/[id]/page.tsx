@@ -331,7 +331,6 @@ function ShopDetail() {
     const [count, setCount] = useState(1);
     const [isScrolled, setIsScrolled] = useState(false);
     const [showScrollTop, setShowScrollTop] = useState(false);
-    const [activeProduct, setActiveProduct] = useState<any>(null);
     const [selectedSize, setSelectedSize] = useState("M");
     const [selectedColorName, setSelectedColorName] = useState("Noir");
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -411,15 +410,10 @@ function ShopDetail() {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 50);
             setShowScrollTop(window.scrollY > 500);
-            if (window.scrollY > 400 && filteredProducts.length > 0) {
-                setActiveProduct(filteredProducts[0]);
-            } else {
-                setActiveProduct(null);
-            }
         };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [filteredProducts]);
+    }, []);
 
     useEffect(() => {
         if (product) {
@@ -758,20 +752,6 @@ function ShopDetail() {
                         <p>© 2026 S E A U R A </p>
                     </div>
                 </footer>
-            </div>
-
-            {/* STICKY BAR */}
-            <div className={`${styles.stickyBarContainer} ${activeProduct ? styles.stickyBarVisible : ""}`}>
-                <div className={styles.stickyInfo}>
-                    <div className={styles.stickyThumb} style={{ position: 'relative' }}>
-                        <Image src={(activeProduct?.images && activeProduct.images.length > 0) ? activeProduct.images[0] : (activeProduct?.image_url || "/images/clothing.png")} alt="Preview" fill sizes="60px" className="object-cover" />
-                    </div>
-                    <div className={styles.stickyText}><h4>{activeProduct?.name}</h4><p>{selectedColorName} • {selectedSize}</p></div>
-                </div>
-                <div className="flex items-center">
-                    <span className={styles.stickyPrice}>{activeProduct?.price} TND</span>
-                    <button className={styles.stickyBtn} onClick={() => addToCart(activeProduct, 1)}>Quick Add</button>
-                </div>
             </div>
 
             {/* CART DRAWER */}

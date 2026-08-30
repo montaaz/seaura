@@ -1063,6 +1063,14 @@
   letter-spacing: 0.05em;
 }
 
+/* Currency suffix on the featured carousel. Set smaller than the amount so the
+   number stays dominant, matching the shop grid's treatment. */
+.currency {
+  font-size: 11px;
+  margin-left: 2px;
+  letter-spacing: 0.05em;
+}
+
 
 .viewAllContainer {
   margin-top: 2rem;

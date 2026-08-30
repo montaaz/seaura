@@ -79,7 +79,9 @@ const FeaturedProductsSection = React.memo(({ products, title }: { products: any
               </div>
               <h3 className={styles.productName}>{product.name}</h3>
 
-              <p className={styles.productPrice}>{parseFloat(product.price).toFixed(0)}</p>
+              <p className={styles.productPrice}>
+                {parseFloat(product.price).toFixed(0)} <span className={styles.currency}>dt</span>
+              </p>
             </Link>
           ))}
         </div>
