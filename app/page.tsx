@@ -513,15 +513,15 @@ export default function Home() {
       {/* Welcome Section */}
       <WelcomeSection cmsContent={cmsContent} />
 
-      {/* Video Section */}
+      {/* Full-width Image Section */}
       <section className={styles.newsletter}>
-        <video
-          className={styles.newsletterVideo}
-          src="/home.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
+        <Image
+          className={styles.newsletterMedia}
+          src="/home.png"
+          alt=""
+          fill
+          // Full-bleed band, so the browser should fetch a viewport-width source.
+          sizes="100vw"
         />
       </section>
 
